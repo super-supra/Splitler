@@ -1,7 +1,36 @@
 @import "tailwindcss";
 
-:root { color-scheme: light dark; }
-body { @apply bg-slate-50 text-slate-900 antialiased; }
-@media (prefers-color-scheme: dark) {
-  body { @apply bg-slate-950 text-slate-100; }
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --color-bg: #0b0b0f;
+  --color-surface: #16161d;
+  --color-surface-2: #22222c;
+  --color-surface-3: #2c2c38;
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-muted: #8b8b99;
+  --color-accent: #6c7cff;
+  --color-accent-hover: #8290ff;
+  --color-pos: #3ddc97;
+  --color-neg: #ff5c6c;
+  --color-warn: #ffb547;
 }
+
+:root { color-scheme: dark; }
+body { @apply bg-bg font-sans text-white antialiased; -webkit-tap-highlight-color: transparent; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+.animate-sheet { animation: sheet-in 220ms cubic-bezier(.2,.8,.2,1) both }
+.animate-fade { animation: fade-in 180ms ease-out both }
+.skeleton {
+  background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-2) 50%, var(--color-surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet, .animate-fade, .skeleton { animation: none }
+}
+.no-scrollbar { scrollbar-width: none }
+.no-scrollbar::-webkit-scrollbar { display: none }
