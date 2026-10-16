@@ -25,9 +25,23 @@ async function readBody(req: IncomingMessage & { body?: unknown }): Promise<unkn
   try { return JSON.parse(text) } catch { return undefined }
 }
 
+/**
+ * On Vercel, vercel.json rewrites /api/* to /api?__p=<path>, so recover the real route from `__p`
+ * when present. Locally (no rewrite) the request path is already correct.
+ */
+export function resolveRoute(rawUrl: string): { path: string; query: Record<string, string> } {
+  const url = new URL(rawUrl, 'http://localhost')
+  const forwarded = url.searchParams.get('__p')
+  url.searchParams.delete('__p')
+  return {
+    path: forwarded !== null ? `/api/${forwarded}` : url.pathname,
+    query: Object.fromEntries(url.searchParams),
+  }
+}
+
 /** Adapter used by both the Vercel function and the local dev server. */
 export async function nodeHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? '/', 'http://localhost')
+  const route = resolveRoute(req.url ?? '/')
   const fwd = req.headers['x-forwarded-for']
   const ip = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
   let body: unknown
@@ -38,8 +52,8 @@ export async function nodeHandler(req: IncomingMessage, res: ServerResponse): Pr
   }
   const r: Req = {
     method: req.method ?? 'GET',
-    path: url.pathname,
-    query: Object.fromEntries(url.searchParams),
+    path: route.path,
+    query: route.query,
     body,
     cookies: parseCookies(req.headers.cookie),
     ip,

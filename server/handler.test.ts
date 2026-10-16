@@ -131,3 +131,12 @@ describe('polling and expiry', () => {
     expect((r.body as { groups: unknown[] }).groups).toHaveLength(0)
   })
 })
+
+describe('resolveRoute', () => {
+  it('uses the real path locally and the rewritten __p param on Vercel', async () => {
+    const { resolveRoute } = await import('./node.js')
+    expect(resolveRoute('/api/groups/abc?v=1')).toEqual({ path: '/api/groups/abc', query: { v: '1' } })
+    expect(resolveRoute('/api?__p=groups/abc&v=1')).toEqual({ path: '/api/groups/abc', query: { v: '1' } })
+    expect(resolveRoute('/api?__p=admin/me')).toEqual({ path: '/api/admin/me', query: {} })
+  })
+})
