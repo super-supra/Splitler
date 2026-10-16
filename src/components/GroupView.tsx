@@ -40,8 +40,8 @@ export function GroupView({ group }: { group: Group }) {
         </div>
         {mine !== null && (
           <p className="mt-5 text-[15px] text-muted">
-            {mine > 0 ? <>You are owed <b className="text-2xl font-extrabold tabular-nums text-pos">{money(mine)}</b></>
-              : mine < 0 ? <>You owe <b className="text-2xl font-extrabold tabular-nums text-neg">{money(-mine)}</b></>
+            {mine > 0 ? <>You get back <b className="text-2xl font-extrabold tabular-nums text-pos">{money(mine)}</b></>
+              : mine < 0 ? <>You have to pay <b className="text-2xl font-extrabold tabular-nums text-neg">{money(-mine)}</b></>
               : <span className="font-semibold text-white">You’re all settled up ✨</span>}
           </p>
         )}

@@ -22,6 +22,36 @@ export interface AdminGroup {
   expiresIn: number
 }
 
+/** Random id for this browser, so the admin log can tell devices apart (names are self-chosen). */
+function deviceId(): string | undefined {
+  try {
+    let d = localStorage.getItem('splitler-device')
+    if (!d) {
+      d = crypto.getRandomValues(new Uint8Array(9)).reduce((a, b) => a + b.toString(36).padStart(2, '0'), '')
+      localStorage.setItem('splitler-device', d)
+    }
+    return d
+  } catch { return undefined }
+}
+const who = (actor?: string) => ({ actor, device: deviceId() })
+
+export type AuditAction =
+  | 'group.create' | 'member.add'
+  | 'expense.add' | 'expense.update' | 'expense.delete' | 'expense.restore'
+  | 'settlement.add' | 'settlement.delete' | 'settlement.restore'
+
+export interface AuditEntry {
+  id: string
+  at: number
+  seq: number
+  action: AuditAction
+  actor?: string
+  device?: string
+  before?: unknown
+  after?: unknown
+  ref?: string
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -45,21 +75,23 @@ export const api = {
   createGroup: (name: string, currency: string, members: string[]) =>
     call<GroupPayload>('POST', '/api/groups', { name, currency, members }),
   deleteGroup: (id: string) => call<{ deleted: boolean }>('DELETE', `/api/groups/${id}`),
+  audit: (id: string) => call<{ entries: AuditEntry[] }>('GET', `/api/groups/${id}/audit`),
+  restore: (id: string, entryId: string) => call<GroupPayload>('POST', `/api/groups/${id}/audit/${entryId}/restore`),
 
   getGroup: (id: string, ver?: string) =>
     call<GroupPayload | { unchanged: true }>('GET', `/api/groups/${id}${ver ? `?v=${encodeURIComponent(ver)}` : ''}`),
   addMember: (id: string, name: string, actor?: string) =>
-    call<GroupPayload>('POST', `/api/groups/${id}/members`, { name, actor }),
+    call<GroupPayload>('POST', `/api/groups/${id}/members`, { name, ...who(actor) }),
   createExpense: (id: string, e: ExpenseInput, actor?: string) =>
-    call<GroupPayload>('POST', `/api/groups/${id}/expenses`, { ...e, actor }),
+    call<GroupPayload>('POST', `/api/groups/${id}/expenses`, { ...e, ...who(actor) }),
   updateExpense: (id: string, eid: string, e: ExpenseInput, actor?: string) =>
-    call<GroupPayload>('PUT', `/api/groups/${id}/expenses/${eid}`, { ...e, actor }),
+    call<GroupPayload>('PUT', `/api/groups/${id}/expenses/${eid}`, { ...e, ...who(actor) }),
   deleteExpense: (id: string, eid: string, actor?: string) =>
-    call<GroupPayload>('DELETE', `/api/groups/${id}/expenses/${eid}`, { actor }),
+    call<GroupPayload>('DELETE', `/api/groups/${id}/expenses/${eid}`, { ...who(actor) }),
   createSettlement: (id: string, s: SettlementInput, actor?: string) =>
-    call<GroupPayload>('POST', `/api/groups/${id}/settlements`, { ...s, actor }),
+    call<GroupPayload>('POST', `/api/groups/${id}/settlements`, { ...s, ...who(actor) }),
   deleteSettlement: (id: string, sid: string, actor?: string) =>
-    call<GroupPayload>('DELETE', `/api/groups/${id}/settlements/${sid}`, { actor }),
+    call<GroupPayload>('DELETE', `/api/groups/${id}/settlements/${sid}`, { ...who(actor) }),
 }
 
 export function formatExpiry(seconds: number): string {

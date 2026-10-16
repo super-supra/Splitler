@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import type { Group, Transfer } from '../lib/types'
 import { useGroupCtx } from '../context'
 import { Icon } from './icons'
-import { AmountInput, Avatar, Button, ErrorText, labelCls, MemberChip, Modal } from './ui'
+import { AmountInput, Avatar, Button, ErrorText, inputCls, labelCls, MemberChip, Modal } from './ui'
 
 export function SettleForm({ group, preset, onClose }: { group: Group; preset?: Transfer; onClose: () => void }) {
   const { actions, me } = useGroupCtx()
@@ -13,6 +13,8 @@ export function SettleForm({ group, preset, onClose }: { group: Group; preset?: 
   const [from, setFrom] = useState(preset?.from ?? me ?? group.members[0]?.id ?? '')
   const [to, setTo] = useState(preset?.to ?? group.members.find((m) => m.id !== (preset?.from ?? me ?? group.members[0]?.id))?.id ?? '')
   const [amount, setAmount] = useState(preset ? fromMinor(preset.amount) : '')
+  const [date, setDate] = useState(todayISO())
+  const [note, setNote] = useState('')
   const [picking, setPicking] = useState<'from' | 'to' | null>(null)
   const [error, setError] = useState('')
 
@@ -22,9 +24,10 @@ export function SettleForm({ group, preset, onClose }: { group: Group; preset?: 
     const amt = toMinor(amount)
     if (from === to) return setError('Choose two different people.')
     if (amt === null || amt <= 0) return setError('Enter a valid amount.')
+    if (!date || date > todayISO()) return setError('Pick a date that isn’t in the future.')
     setBusy(true)
     try {
-      await actions.addSettlement({ fromId: from, toId: to, amount: amt, date: todayISO() })
+      await actions.addSettlement({ fromId: from, toId: to, amount: amt, date, ...(note.trim() ? { note: note.trim() } : {}) })
       toast('Payment recorded')
       onClose()
     } catch (e) {
@@ -70,6 +73,16 @@ export function SettleForm({ group, preset, onClose }: { group: Group; preset?: 
 
         <div className="py-2">
           <AmountInput symbol={currencySymbol(group.currency)} value={amount} onChange={setAmount} autoFocus={!preset} />
+        </div>
+        <div className="space-y-3 rounded-2xl bg-surface-2/50 p-4">
+          <label className="block">
+            <span className={labelCls}>When was it paid?</span>
+            <input className={inputCls} type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Note (optional)</span>
+            <input className={inputCls} placeholder="e.g. via GPay" maxLength={120} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
         </div>
         <p className="text-center text-xs text-muted">This records a payment made outside Splitler, like cash or UPI.</p>
         <ErrorText>{error}</ErrorText>

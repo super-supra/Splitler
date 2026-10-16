@@ -60,6 +60,7 @@ export function useGroupSync(id: string, getActor: () => string | undefined) {
       addSettlement: async (input) => apply(await api.createSettlement(id, input, actor())),
       deleteSettlement: async (sid) => apply(await api.deleteSettlement(id, sid, actor())),
       addMember: async (name) => apply(await api.addMember(id, name, actor())),
+      restore: async (entryId) => apply(await api.restore(id, entryId)),
     }
   }, [id, apply])
 

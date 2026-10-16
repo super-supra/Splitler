@@ -38,7 +38,7 @@ export function ExpensesTab({ group, onEdit, onAdd }: { group: Group; onEdit: (e
       <div className="flex flex-col items-center rounded-3xl bg-surface px-6 py-12 text-center">
         <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-accent/15 text-accent"><Icon name="receipt" size={26} /></div>
         <h2 className="font-bold">No expenses yet</h2>
-        <p className="mt-1 text-sm text-muted">Add the first one and Splitler will work out who owes whom.</p>
+        <p className="mt-1 text-sm text-muted">Add the first one and Splitler will work out who has to pay whom.</p>
         <Button className="mt-5" onClick={onAdd}>Add expense</Button>
       </div>
     )
@@ -70,9 +70,12 @@ export function ExpensesTab({ group, onEdit, onAdd }: { group: Group; onEdit: (e
                       }}>
                       {dateCol}
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-pos/15 text-pos"><Icon name="cash" /></span>
-                      <p className="flex-1 text-sm text-muted">
-                        <b className="font-semibold text-white">{name(s.fromId)}</b> paid <b className="font-semibold text-white">{name(s.toId)}</b>
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-muted">
+                          <b className="font-semibold text-white">{name(s.fromId)}</b> paid <b className="font-semibold text-white">{name(s.toId)}</b>
+                        </p>
+                        {s.note && <p className="truncate text-xs text-muted">{s.note}</p>}
+                      </div>
                       <span className="font-semibold tabular-nums text-pos">{money(s.amount)}</span>
                     </button>
                   </li>
@@ -98,9 +101,9 @@ export function ExpensesTab({ group, onEdit, onAdd }: { group: Group; onEdit: (e
                       {!me ? (
                         <span className="font-semibold tabular-nums">{money(e.amount)}</span>
                       ) : lent > 0 ? (
-                        <><div className="text-[11px] text-pos">you lent</div><div className="font-semibold tabular-nums text-pos">{money(lent)}</div></>
+                        <><div className="text-[11px] text-pos">you get back</div><div className="font-semibold tabular-nums text-pos">{money(lent)}</div></>
                       ) : borrowed > 0 ? (
-                        <><div className="text-[11px] text-neg">you borrowed</div><div className="font-semibold tabular-nums text-neg">{money(borrowed)}</div></>
+                        <><div className="text-[11px] text-neg">your share</div><div className="font-semibold tabular-nums text-neg">{money(borrowed)}</div></>
                       ) : (
                         <div className="text-xs text-muted">not involved</div>
                       )}
@@ -161,7 +164,7 @@ export function BalancesTab({ group, net, onSettle }: {
                 <div className="flex-1">
                   <p className="font-semibold">{m.name}{m.id === me && <span className="ml-1.5 text-xs font-medium text-muted">(you)</span>}</p>
                   <p className={`text-sm ${v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'text-muted'}`}>
-                    {v > 0 ? `Is owed ${money(v)}` : v < 0 ? `Owes ${money(-v)}` : 'Settled up'}
+                    {v > 0 ? `Gets back ${money(v)}` : v < 0 ? `Has to pay ${money(-v)}` : 'All settled'}
                   </p>
                 </div>
               </li>

@@ -24,6 +24,7 @@ export interface Settlement {
   toId: string
   amount: number
   date: string
+  note?: string
 }
 
 export interface ActivityItem {

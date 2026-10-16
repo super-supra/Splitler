@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AdminLog } from '../components/AdminLog'
 import { GroupView } from '../components/GroupView'
 import { Icon } from '../components/icons'
 import { Avatar, Button } from '../components/ui'
@@ -30,6 +31,7 @@ function Skeleton() {
 export function GroupPage({ id }: { id: string }) {
   const [meId, setMeId] = useState<string | null>(() => readMe(id))
   const [isAdmin, setIsAdmin] = useState(false)
+  const [showLog, setShowLog] = useState(false)
   // actor name is resolved lazily so mutations always label the current identity
   const [nameRef] = useState({ current: undefined as string | undefined })
   const { group, expiresIn, status, actions } = useGroupSync(id, () => nameRef.current)
@@ -82,6 +84,11 @@ export function GroupPage({ id }: { id: string }) {
                 <span className="text-muted">You’re</span> <span className="font-semibold">{me.name}</span>
               </button>
             )}
+            {isAdmin && (
+              <Button variant="icon" aria-label="Admin log" title="Admin log" onClick={() => setShowLog(true)}>
+                <Icon name="lock" size={18} />
+              </Button>
+            )}
             <Button variant="icon" aria-label="Share group link" onClick={share}><Icon name="share" size={18} /></Button>
           </div>
         </nav>
@@ -96,7 +103,8 @@ export function GroupPage({ id }: { id: string }) {
           </span>
         </p>
       </div>
-      {!me && <WhoAreYou group={group} onPick={pick} onAdd={async (name) => {
+      {showLog && isAdmin && <AdminLog group={group} onClose={() => setShowLog(false)} />}
+      {!me && !showLog && <WhoAreYou group={group} onPick={pick} onAdd={async (name) => {
         const g = await actions.addMember(name)
         const added = g.members.find((m) => m.name.toLowerCase() === name.toLowerCase())
         if (added) pick(added.id)

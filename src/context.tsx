@@ -8,6 +8,8 @@ export interface GroupActions {
   addSettlement(input: SettlementInput): Promise<Group>
   deleteSettlement(id: string): Promise<Group>
   addMember(name: string): Promise<Group>
+  /** admin only: undo a delete recorded in the admin log */
+  restore(entryId: string): Promise<Group>
 }
 
 export interface GroupCtx {
