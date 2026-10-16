@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { netBalances } from '../lib/balances'
+import { netBalances, pairwiseDebts, simplifyDebts } from '../lib/balances'
 import { formatMoney } from '../lib/money'
 import type { Expense, Group, Transfer } from '../lib/types'
 import { useGroupCtx } from '../context'
+import { Breakdown, Collapse } from './Breakdown'
 import { ExpenseForm } from './ExpenseForm'
 import { ActivityTab, BalancesTab, ExpensesTab } from './GroupTabs'
 import { Icon } from './icons'
@@ -21,10 +22,17 @@ export function GroupView({ group }: { group: Group }) {
   const [tab, setTab] = useState<Tab>('expenses')
   const [editing, setEditing] = useState<Expense | 'new' | null>(null)
   const [settle, setSettle] = useState<Transfer | 'new' | null>(null)
+  const [simplify, setSimplify] = useState(true)
+  const [open, setOpen] = useState(false)
 
   const net = useMemo(
     () => netBalances(group.members.map((m) => m.id), group.expenses, group.settlements),
     [group],
+  )
+  // single "who pays whom" plan shared by the header, Balances tab and Settle up sheet
+  const transfers = useMemo(
+    () => (simplify ? simplifyDebts(net) : pairwiseDebts(group.expenses, group.settlements)),
+    [simplify, net, group],
   )
   const money = (n: number) => formatMoney(n, group.currency)
   const total = group.expenses.reduce((a, e) => a + e.amount, 0)
@@ -38,19 +46,29 @@ export function GroupView({ group }: { group: Group }) {
           <AvatarStack people={group.members} />
           <span className="text-sm text-muted">{group.members.length} people · {money(total)} spent</span>
         </div>
-        {mine !== null && (
-          <p className="mt-5 text-[15px] text-muted">
-            {mine > 0 ? <>You get back <b className="text-2xl font-extrabold tabular-nums text-pos">{money(mine)}</b></>
-              : mine < 0 ? <>You have to pay <b className="text-2xl font-extrabold tabular-nums text-neg">{money(-mine)}</b></>
-              : <span className="font-semibold text-white">You’re all settled up ✨</span>}
-          </p>
+        {mine === 0 && <p className="mt-5 font-semibold">You’re all settled up ✨</p>}
+        {me && mine !== null && mine !== 0 && (
+          <div className="mt-5">
+            <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
+              className="flex items-center gap-2 text-left text-[15px] text-muted">
+              {mine > 0 ? 'You get back' : 'You have to pay'}
+              <b className={`text-2xl font-extrabold tabular-nums ${mine > 0 ? 'text-pos' : 'text-neg'}`}>{money(Math.abs(mine))}</b>
+              <span className="grid size-7 place-items-center rounded-full bg-surface-2 text-white">
+                <Icon name="back" size={14} className={`transition-transform ${open ? 'rotate-90' : '-rotate-90'}`} />
+              </span>
+            </button>
+            <Collapse open={open}>
+              <div className="pt-3"><Breakdown group={group} personId={me} transfers={transfers} onSettle={setSettle} /></div>
+            </Collapse>
+          </div>
         )}
         <div className="mt-5 flex gap-2">
-          <Button className="flex items-center gap-2" onClick={() => setSettle('new')} disabled={group.members.length < 2}>
-            <Icon name="cash" size={18} /> Settle up
+          <Button variant="ghost" className="flex flex-1 items-center justify-center gap-2 !py-3"
+            onClick={() => setEditing('new')} disabled={group.members.length === 0}>
+            <Icon name="plus" size={18} /> Add expense
           </Button>
-          <Button variant="ghost" className="flex items-center gap-2" onClick={() => setTab('balances')}>
-            <Icon name="users" size={18} /> Balances
+          <Button className="flex flex-1 items-center justify-center gap-2" onClick={() => setSettle('new')} disabled={group.members.length < 2}>
+            <Icon name="cash" size={18} /> Settle up
           </Button>
         </div>
       </header>
@@ -58,18 +76,12 @@ export function GroupView({ group }: { group: Group }) {
       <Segmented className="mb-5 mt-7" value={tab} options={TABS} onChange={setTab} />
 
       {tab === 'expenses' && <ExpensesTab group={group} onEdit={setEditing} onAdd={() => setEditing('new')} />}
-      {tab === 'balances' && <BalancesTab group={group} net={net} onSettle={setSettle} />}
+      {tab === 'balances' && <BalancesTab group={group} net={net} transfers={transfers}
+        simplify={simplify} onSimplify={setSimplify} onSettle={setSettle} />}
       {tab === 'activity' && <ActivityTab group={group} />}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-xl justify-end px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        <Button className="pointer-events-auto flex items-center gap-2 shadow-xl shadow-accent/30 !py-3.5"
-          onClick={() => setEditing('new')} disabled={group.members.length === 0}>
-          <Icon name="plus" size={20} /> Add expense
-        </Button>
-      </div>
-
       {editing && <ExpenseForm group={group} existing={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
-      {settle && <SettleForm group={group} preset={settle === 'new' ? undefined : settle} onClose={() => setSettle(null)} />}
+      {settle && <SettleForm group={group} transfers={transfers} preset={settle === 'new' ? undefined : settle} onClose={() => setSettle(null)} />}
     </div>
   )
 }

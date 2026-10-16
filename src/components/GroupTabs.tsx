@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { pairwiseDebts, simplifyDebts } from '../lib/balances'
 import { category } from '../lib/categories'
 import { dayLabel, dayParts, monthLabel, relativeTime } from '../lib/format'
 import { formatMoney } from '../lib/money'
@@ -7,6 +6,7 @@ import { computeSplit } from '../lib/splits'
 import { copyText, toast } from '../lib/toast'
 import type { Expense, Group, Settlement, Transfer } from '../lib/types'
 import { useGroupCtx } from '../context'
+import { Breakdown, Collapse } from './Breakdown'
 import { Icon } from './icons'
 import { Avatar, Button, inputCls, Toggle } from './ui'
 
@@ -119,19 +119,21 @@ export function ExpensesTab({ group, onEdit, onAdd }: { group: Group; onEdit: (e
   )
 }
 
-export function BalancesTab({ group, net, onSettle }: {
-  group: Group; net: Record<string, number>; onSettle: (t: Transfer) => void
+export function BalancesTab({ group, net, transfers, simplify, onSimplify, onSettle }: {
+  group: Group
+  net: Record<string, number>
+  transfers: Transfer[]
+  simplify: boolean
+  onSimplify: (v: boolean) => void
+  onSettle: (t: Transfer) => void
 }) {
   const { actions, me } = useGroupCtx()
-  const [simplify, setSimplify] = useState(true)
   const [newMember, setNewMember] = useState('')
   const [adding, setAdding] = useState(false)
+  const [open, setOpen] = useState<Set<string>>(() => new Set(me ? [me] : []))
   const name = (id: string) => group.members.find((m) => m.id === id)?.name ?? '?'
   const money = (n: number) => formatMoney(n, group.currency)
-  const transfers = useMemo(
-    () => (simplify ? simplifyDebts(net) : pairwiseDebts(group.expenses, group.settlements)),
-    [simplify, net, group],
-  )
+  const toggle = (id: string) => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   return (
     <div className="space-y-6">
@@ -158,8 +160,9 @@ export function BalancesTab({ group, net, onSettle }: {
           )}
           {group.members.map((m) => {
             const v = net[m.id] ?? 0
-            return (
-              <li key={m.id} className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-0">
+            const isOpen = v !== 0 && open.has(m.id)
+            const summary = (
+              <>
                 <Avatar id={m.id} name={m.name} />
                 <div className="flex-1">
                   <p className="font-semibold">{m.name}{m.id === me && <span className="ml-1.5 text-xs font-medium text-muted">(you)</span>}</p>
@@ -167,10 +170,36 @@ export function BalancesTab({ group, net, onSettle }: {
                     {v > 0 ? `Gets back ${money(v)}` : v < 0 ? `Has to pay ${money(-v)}` : 'All settled'}
                   </p>
                 </div>
+              </>
+            )
+            return (
+              <li key={m.id} className="border-b border-line last:border-0">
+                {v === 0 ? (
+                  <div className="flex items-center gap-3 px-4 py-3">{summary}</div>
+                ) : (
+                  <>
+                    <button type="button" aria-expanded={isOpen} onClick={() => toggle(m.id)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/[.03]">
+                      {summary}
+                      <Icon name="back" size={16} className={`text-muted transition-transform ${isOpen ? 'rotate-90' : '-rotate-90'}`} />
+                    </button>
+                    <Collapse open={isOpen}>
+                      <div className="px-4 pb-3"><Breakdown group={group} personId={m.id} transfers={transfers} onSettle={onSettle} /></div>
+                    </Collapse>
+                  </>
+                )}
               </li>
             )
           })}
         </ul>
+        {transfers.length === 0 ? (
+          <p className="mt-3 text-center text-sm text-muted">🎉 Everyone is settled up</p>
+        ) : (
+          <Button variant="ghost" className="mt-3 flex w-full items-center justify-center gap-2" onClick={async () => {
+            const text = transfers.map((t) => `${name(t.from)} pays ${name(t.to)} ${money(t.amount)}`).join('\n')
+            await copyText(`${group.name}\n${text}`, 'Summary copied')
+          }}><Icon name="copy" size={16} /> Copy summary</Button>
+        )}
       </section>
 
       <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3.5">
@@ -179,41 +208,8 @@ export function BalancesTab({ group, net, onSettle }: {
           <p className="font-semibold">Simplify debts</p>
           <p className="text-xs text-muted">Combine debts to reduce the number of payments</p>
         </div>
-        <Toggle checked={simplify} onChange={setSimplify} label="Simplify debts" />
+        <Toggle checked={simplify} onChange={onSimplify} label="Simplify debts" />
       </div>
-
-      <section>
-        <h3 className={sectionCls}>Suggested payments</h3>
-        {transfers.length === 0 ? (
-          <div className="rounded-2xl bg-surface px-4 py-8 text-center">
-            <p className="text-2xl">🎉</p>
-            <p className="mt-1 font-semibold">All settled up</p>
-          </div>
-        ) : (
-          <ul className="overflow-hidden rounded-2xl bg-surface">
-            {transfers.map((t, i) => (
-              <li key={i} className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-0">
-                <div className="flex items-center gap-1.5">
-                  <Avatar id={t.from} name={name(t.from)} size="sm" />
-                  <Icon name="arrow" size={14} className="text-muted" />
-                  <Avatar id={t.to} name={name(t.to)} size="sm" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm"><b>{name(t.from)}</b> <span className="text-muted">pays</span> <b>{name(t.to)}</b></p>
-                  <p className="font-semibold tabular-nums">{money(t.amount)}</p>
-                </div>
-                <Button variant="ghost" className="!px-3.5 !py-2" onClick={() => onSettle(t)}>Settle</Button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {transfers.length > 0 && (
-          <Button variant="ghost" className="mt-3 flex w-full items-center justify-center gap-2" onClick={async () => {
-            const text = transfers.map((t) => `${name(t.from)} pays ${name(t.to)} ${money(t.amount)}`).join('\n')
-            await copyText(`${group.name}\n${text}`, 'Summary copied')
-          }}><Icon name="copy" size={16} /> Copy summary</Button>
-        )}
-      </section>
     </div>
   )
 }

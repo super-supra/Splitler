@@ -71,7 +71,7 @@ export function GroupPage({ id }: { id: string }) {
 
   return (
     <GroupContext.Provider value={{ actions, me: me?.id ?? null }}>
-      <div className="mx-auto max-w-xl px-4 pb-32 pt-[max(1rem,env(safe-area-inset-top))]">
+      <div className="mx-auto max-w-xl px-4 pb-16 pt-[max(1rem,env(safe-area-inset-top))]">
         <nav className="mb-5 flex items-center justify-between">
           {isAdmin ? (
             <Button variant="icon" aria-label="Admin home" onClick={() => navigate('/')}><Icon name="back" /></Button>

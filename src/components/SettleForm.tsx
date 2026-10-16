@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { currencySymbol, todayISO } from '../lib/format'
-import { fromMinor, toMinor } from '../lib/money'
+import { formatMoney, fromMinor, toMinor } from '../lib/money'
 import { toast } from '../lib/toast'
 import type { Group, Transfer } from '../lib/types'
 import { useGroupCtx } from '../context'
 import { Icon } from './icons'
 import { AmountInput, Avatar, Button, ErrorText, inputCls, labelCls, MemberChip, Modal } from './ui'
 
-export function SettleForm({ group, preset, onClose }: { group: Group; preset?: Transfer; onClose: () => void }) {
+export function SettleForm({ group, transfers, preset, onClose }: {
+  group: Group; transfers: Transfer[]; preset?: Transfer; onClose: () => void
+}) {
   const { actions, me } = useGroupCtx()
   const [busy, setBusy] = useState(false)
   const [from, setFrom] = useState(preset?.from ?? me ?? group.members[0]?.id ?? '')
@@ -19,6 +21,19 @@ export function SettleForm({ group, preset, onClose }: { group: Group; preset?: 
   const [error, setError] = useState('')
 
   const person = (id: string) => group.members.find((m) => m.id === id)
+  const who = (id: string) => (id === me ? 'You' : person(id)?.name ?? '?')
+
+  // what the current user owes and is owed (everything, if they haven't picked a name)
+  const suggestions = me ? transfers.filter((t) => t.from === me || t.to === me) : transfers
+  const amt = toMinor(amount)
+  const isPicked = (t: Transfer) => t.from === from && t.to === to && amt === t.amount
+  function pick(t: Transfer) {
+    setFrom(t.from)
+    setTo(t.to)
+    setAmount(fromMinor(t.amount))
+    setPicking(null)
+    setError('')
+  }
 
   async function submit() {
     const amt = toMinor(amount)
@@ -69,6 +84,42 @@ export function SettleForm({ group, preset, onClose }: { group: Group; preset?: 
               ))}
             </div>
           </div>
+        )}
+
+        {suggestions.length > 0 ? (
+          <div>
+            <span className={labelCls}>{me ? 'Your balances · tap to fill' : 'Suggested payments · tap to fill'}</span>
+            <ul className="space-y-1.5">
+              {suggestions.map((t) => {
+                const other = t.from === me ? t.to : t.from
+                const on = isPicked(t)
+                return (
+                  <li key={`${t.from}-${t.to}`}>
+                    <button type="button" aria-pressed={on} onClick={() => pick(t)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                        on ? 'bg-accent/15 ring-1 ring-accent' : 'bg-surface-2/60 hover:bg-surface-2'}`}>
+                      <Avatar id={other} name={person(other)?.name ?? '?'} size="sm" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-muted">
+                        {t.from === me ? <>You pay <b className="text-white">{who(t.to)}</b></>
+                          : t.to === me ? <><b className="text-white">{who(t.from)}</b> pays you</>
+                          : <><b className="text-white">{who(t.from)}</b> pays <b className="text-white">{who(t.to)}</b></>}
+                      </span>
+                      <span className={`text-sm font-semibold tabular-nums ${t.from === me ? 'text-neg' : t.to === me ? 'text-pos' : ''}`}>
+                        {formatMoney(t.amount, group.currency)}
+                      </span>
+                      <span className={`grid size-5 place-items-center rounded-full border-2 ${on ? 'border-accent bg-accent text-white' : 'border-surface-3'}`}>
+                        {on && <Icon name="check" size={11} strokeWidth={3} />}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-surface-2/60 px-3 py-2.5 text-center text-sm text-muted">
+            {me ? 'You’re all settled — nothing suggested.' : 'Everyone is settled up.'}
+          </p>
         )}
 
         <div className="py-2">
