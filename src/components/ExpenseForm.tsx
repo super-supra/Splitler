@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { fromMinor, toMinor } from '../lib/money'
 import { computeSplit } from '../lib/splits'
 import type { Expense, Group, SplitType } from '../lib/types'
-import { uid, useStore } from '../store/store'
+import { useGroupCtx } from '../context'
 import { Button, inputCls, Modal } from './ui'
 
 const CATEGORIES = ['General', 'Food', 'Groceries', 'Transport', 'Stay', 'Fun', 'Bills']
@@ -14,10 +14,11 @@ const TYPES: { id: SplitType; label: string; unit: string }[] = [
 ]
 
 export function ExpenseForm({ group, existing, onClose }: { group: Group; existing?: Expense; onClose: () => void }) {
-  const { dispatch } = useStore()
+  const { actions, me } = useGroupCtx()
+  const [busy, setBusy] = useState(false)
   const [desc, setDesc] = useState(existing?.description ?? '')
   const [amount, setAmount] = useState(existing ? fromMinor(existing.amount) : '')
-  const [payer, setPayer] = useState(existing?.payerId ?? group.members[0]?.id ?? '')
+  const [payer, setPayer] = useState(existing?.payerId ?? me ?? group.members[0]?.id ?? '')
   const [date, setDate] = useState(existing?.date ?? new Date().toISOString().slice(0, 10))
   const [category, setCategory] = useState(existing?.category ?? 'General')
   const [type, setType] = useState<SplitType>(existing?.splitType ?? 'equal')
@@ -49,19 +50,23 @@ export function ExpenseForm({ group, existing, onClose }: { group: Group; existi
     return out
   }
 
-  function submit() {
+  async function submit() {
     if (!desc.trim()) return setError('Add a description.')
     if (total === null || total <= 0) return setError('Enter a valid amount.')
     const values = buildValues()
     if (typeof values === 'string') return setError(values)
     const res = computeSplit(total, type, values)
     if (!res.ok) return setError(res.error)
-    dispatch({
-      type: 'saveExpense', groupId: group.id,
-      expense: { id: existing?.id ?? uid(), description: desc.trim(), amount: total, payerId: payer,
-        date, category, splitType: type, splitValues: values },
-    })
-    onClose()
+    setBusy(true)
+    try {
+      await actions.saveExpense(
+        { description: desc.trim(), amount: total, payerId: payer, date, category, splitType: type, splitValues: values },
+        existing?.id)
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save')
+      setBusy(false)
+    }
   }
 
   const preview = total && total > 0 ? (() => {
@@ -121,7 +126,7 @@ export function ExpenseForm({ group, existing, onClose }: { group: Group; existi
         {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit}>Save</Button>
+          <Button onClick={submit} disabled={busy}>Save</Button>
         </div>
       </div>
     </Modal>

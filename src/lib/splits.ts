@@ -1,4 +1,4 @@
-import type { SplitType } from './types'
+import type { SplitType } from './types.ts'
 
 /**
  * Distribute `total` minor units across `weights` using the largest-remainder

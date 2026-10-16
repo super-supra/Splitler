@@ -1,23 +1,29 @@
 import { useState } from 'react'
 import { fromMinor, toMinor } from '../lib/money'
 import type { Group, Transfer } from '../lib/types'
-import { uid, useStore } from '../store/store'
+import { useGroupCtx } from '../context'
 import { Button, inputCls, Modal } from './ui'
 
 export function SettleForm({ group, preset, onClose }: { group: Group; preset?: Transfer; onClose: () => void }) {
-  const { dispatch } = useStore()
+  const { actions } = useGroupCtx()
+  const [busy, setBusy] = useState(false)
   const [from, setFrom] = useState(preset?.from ?? group.members[0]?.id ?? '')
   const [to, setTo] = useState(preset?.to ?? group.members[1]?.id ?? group.members[0]?.id ?? '')
   const [amount, setAmount] = useState(preset ? fromMinor(preset.amount) : '')
   const [error, setError] = useState('')
 
-  function submit() {
+  async function submit() {
     const amt = toMinor(amount)
     if (from === to) return setError('Choose two different people.')
     if (amt === null || amt <= 0) return setError('Enter a valid amount.')
-    dispatch({ type: 'addSettlement', groupId: group.id,
-      settlement: { id: uid(), fromId: from, toId: to, amount: amt, date: new Date().toISOString().slice(0, 10) } })
-    onClose()
+    setBusy(true)
+    try {
+      await actions.addSettlement({ fromId: from, toId: to, amount: amt, date: new Date().toISOString().slice(0, 10) })
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save')
+      setBusy(false)
+    }
   }
 
   const opts = group.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)
@@ -33,7 +39,7 @@ export function SettleForm({ group, preset, onClose }: { group: Group; preset?: 
         {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit}>Record payment</Button>
+          <Button onClick={submit} disabled={busy}>Record payment</Button>
         </div>
       </div>
     </Modal>

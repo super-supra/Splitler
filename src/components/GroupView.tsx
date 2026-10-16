@@ -2,15 +2,15 @@ import { useMemo, useState } from 'react'
 import { netBalances, pairwiseDebts, simplifyDebts } from '../lib/balances'
 import { formatMoney } from '../lib/money'
 import type { Expense, Group, Transfer } from '../lib/types'
-import { useStore } from '../store/store'
+import { useGroupCtx } from '../context'
 import { ExpenseForm } from './ExpenseForm'
 import { SettleForm } from './SettleForm'
 import { Button, Card, inputCls } from './ui'
 
 type Tab = 'expenses' | 'balances' | 'activity'
 
-export function GroupView({ group, onBack }: { group: Group; onBack: () => void }) {
-  const { dispatch } = useStore()
+export function GroupView({ group }: { group: Group }) {
+  const { actions } = useGroupCtx()
   const [tab, setTab] = useState<Tab>('expenses')
   const [simplify, setSimplify] = useState(true)
   const [editing, setEditing] = useState<Expense | 'new' | null>(null)
@@ -32,7 +32,7 @@ export function GroupView({ group, onBack }: { group: Group; onBack: () => void 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="text-sm text-emerald-600">← All groups</button>
+        <span />
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setSettle('new')}>Settle up</Button>
           <Button onClick={() => setEditing('new')} disabled={group.members.length === 0}>Add expense</Button>
@@ -71,7 +71,7 @@ export function GroupView({ group, onBack }: { group: Group; onBack: () => void 
                 <span className="font-semibold">{money(e.amount)}</span>
                 <Button variant="ghost" onClick={() => setEditing(e)} aria-label={`Edit ${e.description}`}>Edit</Button>
                 <Button variant="danger" aria-label={`Delete ${e.description}`}
-                  onClick={() => dispatch({ type: 'deleteExpense', groupId: group.id, expenseId: e.id })}>Delete</Button>
+                  onClick={() => void actions.deleteExpense(e.id).catch((err) => alert(err.message))}>Delete</Button>
               </div>
             </Card>
           ))}
@@ -81,7 +81,7 @@ export function GroupView({ group, onBack }: { group: Group; onBack: () => void 
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-emerald-600">{money(s.amount)}</span>
                 <Button variant="danger"
-                  onClick={() => dispatch({ type: 'deleteSettlement', groupId: group.id, settlementId: s.id })}>Remove</Button>
+                  onClick={() => void actions.deleteSettlement(s.id).catch((err) => alert(err.message))}>Remove</Button>
               </div>
             </Card>
           ))}
@@ -139,8 +139,7 @@ export function GroupView({ group, onBack }: { group: Group; onBack: () => void 
             <form className="flex gap-2" onSubmit={(e) => {
               e.preventDefault()
               if (!newMember.trim()) return
-              dispatch({ type: 'addMember', groupId: group.id, name: newMember.trim() })
-              setNewMember('')
+              actions.addMember(newMember.trim()).then(() => setNewMember('')).catch((err) => alert(err.message))
             }}>
               <input className={inputCls} placeholder="Name" value={newMember} onChange={(e) => setNewMember(e.target.value)} />
               <Button type="submit">Add</Button>
