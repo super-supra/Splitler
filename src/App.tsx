@@ -55,7 +55,7 @@ function Shell() {
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Splitly</h1>
+            <h1 className="text-2xl font-bold">Splitler</h1>
             <div className="flex gap-2">
               {state.groups.length > 0 && (
                 <Button variant="ghost" onClick={() => { if (confirm('Clear all data in this session?')) dispatch({ type: 'clear' }) }}>

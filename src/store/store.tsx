@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
 import type { Expense, Group, Settlement } from '../lib/types'
 
-const KEY = 'splitly-session-v1'
+const KEY = 'splitler-session-v1'
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
