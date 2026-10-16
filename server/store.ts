@@ -73,6 +73,20 @@ export class MemoryStore implements Store {
   }
 }
 
+/**
+ * With automaticDeserialization off, Upstash returns HGETALL as a flat [field, value, ...] array
+ * (not an object). Accept either shape so callers always get a plain record.
+ */
+export function toHash(raw: unknown): Record<string, string> {
+  if (!raw) return {}
+  if (Array.isArray(raw)) {
+    const out: Record<string, string> = {}
+    for (let i = 0; i + 1 < raw.length; i += 2) out[String(raw[i])] = String(raw[i + 1])
+    return out
+  }
+  return raw as Record<string, string>
+}
+
 class UpstashStore implements Store {
   private r: Redis
   constructor(url: string, token: string) {
@@ -81,7 +95,7 @@ class UpstashStore implements Store {
   }
   async hset(key: string, field: string, value: string) { await this.r.hset(key, { [field]: value }) }
   async hget(key: string, field: string) { return (await this.r.hget<string>(key, field)) ?? null }
-  async hgetall(key: string) { return (await this.r.hgetall<Record<string, string>>(key)) ?? {} }
+  async hgetall(key: string) { return toHash(await this.r.hgetall(key)) }
   async hdel(key: string, field: string) { await this.r.hdel(key, field) }
   async hlen(key: string) { return this.r.hlen(key) }
   async del(...keys: string[]) { if (keys.length) await this.r.del(...keys) }

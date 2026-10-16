@@ -140,3 +140,13 @@ describe('resolveRoute', () => {
     expect(resolveRoute('/api?__p=admin/me')).toEqual({ path: '/api/admin/me', query: {} })
   })
 })
+
+describe('toHash (Upstash HGETALL shapes)', () => {
+  it('converts a flat array and passes objects through', async () => {
+    const { toHash } = await import('./store.js')
+    expect(toHash(['a', '{"x":1}', 'b', '2'])).toEqual({ a: '{"x":1}', b: '2' })
+    expect(toHash({ a: '1' })).toEqual({ a: '1' })
+    expect(toHash(null)).toEqual({})
+    expect(toHash([])).toEqual({})
+  })
+})
