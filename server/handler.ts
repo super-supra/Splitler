@@ -4,7 +4,6 @@ import { computeSplit } from '../src/lib/splits.js'
 import { COOKIE, makeToken, passwordMatches, sessionSeconds, tokenValid } from './auth.js'
 import type { Store } from './store.js'
 
-export const TTL_SECONDS = 7 * 24 * 60 * 60
 const MAX_MEMBERS = 30
 const MAX_EXPENSES = 500
 const MAX_SETTLEMENTS = 500
@@ -104,19 +103,17 @@ const parseAll = <T>(h: Record<string, string>) => Object.values(h).map((v) => J
 
 async function loadGroup(s: Store, id: string) {
   const k = keys(id)
-  const [meta, ver, members, expenses, settlements, activity, ttl] = await Promise.all([
+  const [meta, ver, members, expenses, settlements, activity] = await Promise.all([
     loadMeta(s, id),
     s.hget(k.meta, 'ver'),
     s.hgetall(k.members),
     s.hgetall(k.expenses),
     s.hgetall(k.settlements),
     s.hgetall(k.activity),
-    s.ttl(k.meta),
   ])
   const byNew = (a: { createdAt?: number }, b: { createdAt?: number }) => (b.createdAt ?? 0) - (a.createdAt ?? 0)
   return {
     ver: ver ?? '0',
-    expiresIn: ttl,
     group: {
       id,
       name: meta.name,
@@ -129,11 +126,16 @@ async function loadGroup(s: Store, id: string) {
   }
 }
 
-/** Mark the group as changed and push its expiry out to a fresh 7 days. */
+/** Mark the group as changed. Groups are kept until the admin deletes them. */
 async function touch(s: Store, id: string) {
   const k = keys(id)
   await s.hset(k.meta, 'ver', `${Date.now()}-${newId(3)}`)
-  await Promise.all(Object.values(k).map((key) => s.expire(key, TTL_SECONDS)))
+  await keepForever(s, id)
+}
+
+/** Clear the 7-day expiry that groups created before it was removed still carry. */
+async function keepForever(s: Store, id: string) {
+  await Promise.all(Object.values(keys(id)).map((key) => s.persist(key)))
 }
 
 async function log(s: Store, id: string, by: string | undefined, text: string) {
@@ -243,12 +245,13 @@ async function route(req: Req, s: Store, env: Record<string, string | undefined>
     if (parts[1] === 'groups' && m === 'GET') {
       requireAdmin()
       const index = await s.hgetall(ADMIN_INDEX)
-      const out: { id: string; name: string; createdAt: number; expiresIn: number }[] = []
+      const out: { id: string; name: string; createdAt: number }[] = []
       for (const [id, raw] of Object.entries(index)) {
         const ttl = await s.ttl(keys(id).meta)
-        if (ttl === -2) { await s.hdel(ADMIN_INDEX, id); continue } // expired, tidy the index
+        if (ttl === -2) { await s.hdel(ADMIN_INDEX, id); continue } // gone (deleted or expired before this change)
+        if (ttl > 0) await keepForever(s, id)
         const info = JSON.parse(raw) as { name: string; createdAt: number }
-        out.push({ id, name: info.name, createdAt: info.createdAt, expiresIn: ttl })
+        out.push({ id, name: info.name, createdAt: info.createdAt })
       }
       return { status: 200, body: { groups: out.sort((a, b) => b.createdAt - a.createdAt) } }
     }
@@ -287,6 +290,7 @@ async function route(req: Req, s: Store, env: Record<string, string | undefined>
   // --- read (cheap version check for polling) ---
   if (parts.length === 2 && m === 'GET') {
     await loadMeta(s, id)
+    if ((await s.ttl(k.meta)) > 0) await keepForever(s, id)
     const have = req.query.v
     if (have) {
       const ver = await s.hget(k.meta, 'ver')

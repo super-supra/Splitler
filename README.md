@@ -1,9 +1,9 @@
 # Splitler
 
-Split shared expenses with friends. The admin creates a group and shares its link (e.g. on WhatsApp); anyone with the link can add expenses themselves. No accounts. Groups auto-delete after 7 days of no activity.
+Split shared expenses with friends. The admin creates a group and shares its link (e.g. on WhatsApp); anyone with the link can add expenses themselves. No accounts. Groups are kept until the admin deletes them.
 
 - Frontend: Vite + React + TypeScript + Tailwind (`src/`)
-- API: Vercel serverless function (`api/[...path].ts` -> `server/`), storage in Upstash Redis with a 7-day TTL
+- API: Vercel serverless function (`api/[...path].ts` -> `server/`), storage in Upstash Redis
 
 ## Local development
 

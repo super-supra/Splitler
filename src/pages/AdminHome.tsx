@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/icons'
 import { NewGroup } from '../components/NewGroup'
 import { Avatar, Button, ErrorText, inputCls, Spinner } from '../components/ui'
-import { api, ApiError, formatExpiry, type AdminGroup } from '../lib/api'
+import { api, ApiError, type AdminGroup } from '../lib/api'
 import { navigate } from '../lib/route'
 import { copyText, toast } from '../lib/toast'
 
@@ -101,7 +101,7 @@ export function AdminHome() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{g.name}</p>
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
-                    <Icon name="clock" size={12} /> Deletes in {formatExpiry(g.expiresIn)} without activity
+                    <Icon name="clock" size={12} /> Created {new Date(g.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 </div>
                 <Icon name="back" size={18} className="rotate-180 text-muted" />

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { netBalances, pairwiseDebts, simplifyDebts } from '../lib/balances'
+import { netBalances, pairwiseDebts, shares, simplifyDebts } from '../lib/balances'
 import { formatMoney } from '../lib/money'
 import type { Expense, Group, Transfer } from '../lib/types'
 import { useGroupCtx } from '../context'
@@ -37,6 +37,12 @@ export function GroupView({ group }: { group: Group }) {
   const money = (n: number) => formatMoney(n, group.currency)
   const total = group.expenses.reduce((a, e) => a + e.amount, 0)
   const mine = me ? net[me] ?? 0 : null
+  // once nobody owes anything, show how the spending split instead of balances
+  const spending = useMemo(
+    () => (transfers.length === 0 && group.expenses.length > 0
+      ? { shares: shares(group.members.map((m) => m.id), group.expenses), total } : null),
+    [transfers, group, total],
+  )
 
   return (
     <div>
@@ -46,7 +52,14 @@ export function GroupView({ group }: { group: Group }) {
           <AvatarStack people={group.members} />
           <span className="text-sm text-muted">{group.members.length} people · {money(total)} spent</span>
         </div>
-        {mine === 0 && <p className="mt-5 font-semibold">You’re all settled up ✨</p>}
+        {spending && me ? (
+          <div className="mt-5">
+            <p className="text-[15px] text-muted">
+              Your share <b className="text-2xl font-extrabold tabular-nums text-white">{money(spending.shares[me] ?? 0)}</b> of {money(spending.total)}
+            </p>
+            <p className="mt-1 text-sm text-pos">Everyone is settled up ✨</p>
+          </div>
+        ) : mine === 0 && <p className="mt-5 font-semibold">You’re all settled up ✨</p>}
         {me && mine !== null && mine !== 0 && (
           <div className="mt-5">
             <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
@@ -76,7 +89,7 @@ export function GroupView({ group }: { group: Group }) {
       <Segmented className="mb-5 mt-7" value={tab} options={TABS} onChange={setTab} />
 
       {tab === 'expenses' && <ExpensesTab group={group} onEdit={setEditing} onAdd={() => setEditing('new')} />}
-      {tab === 'balances' && <BalancesTab group={group} net={net} transfers={transfers}
+      {tab === 'balances' && <BalancesTab group={group} net={net} transfers={transfers} spending={spending}
         simplify={simplify} onSimplify={setSimplify} onSettle={setSettle} />}
       {tab === 'activity' && <ActivityTab group={group} />}
 

@@ -66,7 +66,6 @@ export function useGroupSync(id: string, getActor: () => string | undefined) {
 
   return {
     group: payload?.group as Group | undefined,
-    expiresIn: payload?.expiresIn ?? -1,
     status,
     actions,
   }

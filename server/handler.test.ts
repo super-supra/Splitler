@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { handle, TTL_SECONDS, type Req, type Res } from './handler.js'
+import { handle, type Req, type Res } from './handler.js'
 import { MemoryStore } from './store.js'
 
 const env = { ADMIN_PASSWORD: 'pw-test', SESSION_SECRET: 'secret-test-secret' }
@@ -180,7 +180,7 @@ describe('admin log', () => {
   })
 })
 
-describe('polling and expiry', () => {
+describe('polling and retention', () => {
   it('returns unchanged for the current version, new data after a write', async () => {
     const { id, ids } = await makeGroup()
     const first = (await call('GET', `/api/groups/${id}`)).body as { ver: string }
@@ -190,22 +190,29 @@ describe('polling and expiry', () => {
     const after = await call('GET', `/api/groups/${id}`, undefined, { query: { v: first.ver } })
     expect((after.body as { unchanged?: boolean }).unchanged).toBeUndefined()
   })
-  it('sets a 7-day TTL, refreshes it on write, and deletes after expiry', async () => {
+  it('keeps groups forever', async () => {
     const { id, ids } = await makeGroup()
-    expect(await store.ttl(`g:${id}:meta`)).toBe(TTL_SECONDS)
-    now += 5 * 24 * 3600 * 1000
-    expect(await store.ttl(`g:${id}:meta`)).toBe(TTL_SECONDS - 5 * 24 * 3600)
     await call('POST', `/api/groups/${id}/expenses`, expense(ids))
-    expect(await store.ttl(`g:${id}:meta`)).toBe(TTL_SECONDS)
-    expect(await store.ttl(`g:${id}:expenses`)).toBe(TTL_SECONDS)
-    now += 8 * 24 * 3600 * 1000
-    expect((await call('GET', `/api/groups/${id}`)).status).toBe(404)
+    for (const part of ['meta', 'members', 'expenses', 'activity', 'audit']) expect(await store.ttl(`g:${id}:${part}`)).toBe(-1)
+    now += 365 * 24 * 3600 * 1000
+    expect((await call('GET', `/api/groups/${id}`)).status).toBe(200)
   })
-  it('drops expired groups from the admin list', async () => {
-    const { cookies } = await makeGroup()
-    now += 8 * 24 * 3600 * 1000
-    const r = await call('GET', '/api/admin/groups', undefined, { cookies })
-    expect((r.body as { groups: unknown[] }).groups).toHaveLength(0)
+  it('makes groups that still carry the old 7-day expiry permanent on read', async () => {
+    const { id } = await makeGroup()
+    for (const part of ['meta', 'members', 'activity']) await store.expire(`g:${id}:${part}`, 7 * 24 * 3600)
+    expect(await store.ttl(`g:${id}:meta`)).toBeGreaterThan(0)
+    await call('GET', `/api/groups/${id}`)
+    expect(await store.ttl(`g:${id}:meta`)).toBe(-1)
+    expect(await store.ttl(`g:${id}:members`)).toBe(-1)
+  })
+  it('makes old expiring groups permanent when the admin lists them, and drops deleted ones', async () => {
+    const { id, cookies } = await makeGroup()
+    await store.expire(`g:${id}:meta`, 7 * 24 * 3600)
+    const list = async () => ((await call('GET', '/api/admin/groups', undefined, { cookies })).body as { groups: unknown[] }).groups
+    expect(await list()).toHaveLength(1)
+    expect(await store.ttl(`g:${id}:meta`)).toBe(-1)
+    await call('DELETE', `/api/groups/${id}`, undefined, { cookies })
+    expect(await list()).toHaveLength(0)
   })
 })
 

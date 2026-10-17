@@ -21,6 +21,17 @@ export function netBalances(
   return net
 }
 
+/** Each person's share of the group's spending (what they consumed, regardless of who paid). */
+export function shares(memberIds: string[], expenses: Expense[]): Record<string, number> {
+  const out: Record<string, number> = Object.fromEntries(memberIds.map((id) => [id, 0]))
+  for (const e of expenses) {
+    const res = computeSplit(e.amount, e.splitType, e.splitValues)
+    if (!res.ok) continue
+    for (const [id, owed] of Object.entries(res.owed)) out[id] = (out[id] ?? 0) + owed
+  }
+  return out
+}
+
 /** Minimise the number of payments: repeatedly match largest creditor with largest debtor. */
 export function simplifyDebts(net: Record<string, number>): Transfer[] {
   const creditors = Object.entries(net)

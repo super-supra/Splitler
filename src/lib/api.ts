@@ -11,15 +11,12 @@ export class ApiError extends Error {
 export interface GroupPayload {
   group: Group
   ver: string
-  /** seconds until the group is auto-deleted */
-  expiresIn: number
 }
 
 export interface AdminGroup {
   id: string
   name: string
   createdAt: number
-  expiresIn: number
 }
 
 /** Random id for this browser, so the admin log can tell devices apart (names are self-chosen). */
@@ -92,12 +89,4 @@ export const api = {
     call<GroupPayload>('POST', `/api/groups/${id}/settlements`, { ...s, ...who(actor) }),
   deleteSettlement: (id: string, sid: string, actor?: string) =>
     call<GroupPayload>('DELETE', `/api/groups/${id}/settlements/${sid}`, { ...who(actor) }),
-}
-
-export function formatExpiry(seconds: number): string {
-  if (seconds < 0) return 'unknown'
-  const days = Math.ceil(seconds / 86400)
-  if (seconds >= 86400) return `${days} day${days === 1 ? '' : 's'}`
-  const hours = Math.max(1, Math.ceil(seconds / 3600))
-  return `${hours} hour${hours === 1 ? '' : 's'}`
 }

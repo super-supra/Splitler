@@ -119,10 +119,12 @@ export function ExpensesTab({ group, onEdit, onAdd }: { group: Group; onEdit: (e
   )
 }
 
-export function BalancesTab({ group, net, transfers, simplify, onSimplify, onSettle }: {
+export function BalancesTab({ group, net, transfers, spending, simplify, onSimplify, onSettle }: {
   group: Group
   net: Record<string, number>
   transfers: Transfer[]
+  /** set once everyone is settled: each person's share of the total, shown instead of balances */
+  spending: { shares: Record<string, number>; total: number } | null
   simplify: boolean
   onSimplify: (v: boolean) => void
   onSettle: (t: Transfer) => void
@@ -158,7 +160,33 @@ export function BalancesTab({ group, net, transfers, simplify, onSimplify, onSet
               </form>
             </li>
           )}
-          {group.members.map((m) => {
+          {spending && (
+            <li className="border-b border-line px-4 py-4">
+              <p className="text-xs font-medium text-muted">Total spent</p>
+              <p className="text-3xl font-extrabold tabular-nums">{money(spending.total)}</p>
+              <p className="mt-1 text-sm text-pos">Everyone is settled up 🎉</p>
+            </li>
+          )}
+          {spending && [...group.members].sort((a, b) => (spending.shares[b.id] ?? 0) - (spending.shares[a.id] ?? 0)).map((m) => {
+            const share = spending.shares[m.id] ?? 0
+            const top = Math.max(1, ...Object.values(spending.shares))
+            const pct = spending.total ? Math.round((share / spending.total) * 100) : 0
+            return (
+              <li key={m.id} className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-0">
+                <Avatar id={m.id} name={m.name} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="truncate font-semibold">{m.name}{m.id === me && <span className="ml-1.5 text-xs font-medium text-muted">(you)</span>}</p>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums">{money(share)} <span className="text-xs font-normal text-muted">{pct}%</span></p>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${(share / top) * 100}%` }} />
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+          {!spending && group.members.map((m) => {
             const v = net[m.id] ?? 0
             const isOpen = v !== 0 && open.has(m.id)
             const summary = (
@@ -192,7 +220,13 @@ export function BalancesTab({ group, net, transfers, simplify, onSimplify, onSet
             )
           })}
         </ul>
-        {transfers.length === 0 ? (
+        {spending ? (
+          <Button variant="ghost" className="mt-3 flex w-full items-center justify-center gap-2" onClick={async () => {
+            const lines = [...group.members].sort((a, b) => (spending.shares[b.id] ?? 0) - (spending.shares[a.id] ?? 0))
+              .map((m) => `${m.name} ${money(spending.shares[m.id] ?? 0)}`)
+            await copyText(`${group.name} — ${money(spending.total)} total\n${lines.join('\n')}`, 'Summary copied')
+          }}><Icon name="copy" size={16} /> Copy summary</Button>
+        ) : transfers.length === 0 ? (
           <p className="mt-3 text-center text-sm text-muted">🎉 Everyone is settled up</p>
         ) : (
           <Button variant="ghost" className="mt-3 flex w-full items-center justify-center gap-2" onClick={async () => {
@@ -202,14 +236,14 @@ export function BalancesTab({ group, net, transfers, simplify, onSimplify, onSet
         )}
       </section>
 
-      <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3.5">
+      {!spending && <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3.5">
         <span className="grid size-10 place-items-center rounded-xl bg-warn/15 text-warn"><Icon name="bolt" /></span>
         <div className="flex-1">
           <p className="font-semibold">Simplify debts</p>
           <p className="text-xs text-muted">Combine debts to reduce the number of payments</p>
         </div>
         <Toggle checked={simplify} onChange={onSimplify} label="Simplify debts" />
-      </div>
+      </div>}
     </div>
   )
 }

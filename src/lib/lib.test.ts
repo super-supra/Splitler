@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { netBalances, pairwiseDebts, simplifyDebts } from './balances'
+import { netBalances, pairwiseDebts, shares, simplifyDebts } from './balances'
 import { toMinor } from './money'
 import { allocate, computeSplit } from './splits'
 import type { Expense } from './types'
@@ -54,6 +54,16 @@ describe('balances', () => {
     // a owes b 10, b owes c 10 -> a pays c 10
     const t = simplifyDebts({ a: -1000, b: 0, c: 1000 })
     expect(t).toEqual([{ from: 'a', to: 'c', amount: 1000 }])
+  })
+  it('shares sum to total spent and ignore who paid', () => {
+    const expenses = [
+      exp({ amount: 1000 }), // equal a/b/c
+      exp({ payerId: 'c', amount: 1001, splitType: 'percent', splitValues: { a: 50, b: 50 } }),
+    ]
+    const sh = shares(['a', 'b', 'c'], expenses)
+    expect(sum(Object.values(sh))).toBe(2001)
+    expect(sh.c).toBe(333)
+    expect(sh.a + sh.b).toBe(667 + 1001)
   })
   it('pairwise nets opposing debts', () => {
     const t = pairwiseDebts(

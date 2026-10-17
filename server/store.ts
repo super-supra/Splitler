@@ -9,6 +9,8 @@ export interface Store {
   hlen(key: string): Promise<number>
   del(...keys: string[]): Promise<void>
   expire(key: string, seconds: number): Promise<void>
+  /** Remove any expiry so the key is kept forever. */
+  persist(key: string): Promise<void>
   /** Seconds left, -1 if no expiry, -2 if the key does not exist (same as Redis). */
   ttl(key: string): Promise<number>
   /** Increment a counter; the first increment starts a window of `windowSeconds`. */
@@ -60,6 +62,10 @@ export class MemoryStore implements Store {
     const e = this.live(key)
     if (e) e.expiresAt = this.now() + seconds * 1000
   }
+  async persist(key: string) {
+    const e = this.live(key)
+    if (e) e.expiresAt = null
+  }
   async ttl(key: string) {
     const e = this.live(key)
     if (!e) return -2
@@ -100,6 +106,7 @@ class UpstashStore implements Store {
   async hlen(key: string) { return this.r.hlen(key) }
   async del(...keys: string[]) { if (keys.length) await this.r.del(...keys) }
   async expire(key: string, seconds: number) { await this.r.expire(key, seconds) }
+  async persist(key: string) { await this.r.persist(key) }
   async ttl(key: string) { return this.r.ttl(key) }
   async incr(key: string, windowSeconds: number) {
     const n = await this.r.incr(key)

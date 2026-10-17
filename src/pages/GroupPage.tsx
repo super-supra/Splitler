@@ -6,7 +6,7 @@ import { Avatar, Button } from '../components/ui'
 import { WhoAreYou } from '../components/WhoAreYou'
 import { GroupContext } from '../context'
 import { useGroupSync } from '../hooks/useGroupSync'
-import { api, formatExpiry } from '../lib/api'
+import { api } from '../lib/api'
 import { navigate } from '../lib/route'
 import { copyText } from '../lib/toast'
 
@@ -34,7 +34,7 @@ export function GroupPage({ id }: { id: string }) {
   const [showLog, setShowLog] = useState(false)
   // actor name is resolved lazily so mutations always label the current identity
   const [nameRef] = useState({ current: undefined as string | undefined })
-  const { group, expiresIn, status, actions } = useGroupSync(id, () => nameRef.current)
+  const { group, status, actions } = useGroupSync(id, () => nameRef.current)
 
   useEffect(() => { api.me().then((r) => setIsAdmin(r.admin)).catch(() => {}) }, [])
 
@@ -53,8 +53,8 @@ export function GroupPage({ id }: { id: string }) {
         <div className="mb-5 grid size-16 place-items-center rounded-2xl bg-surface text-muted">
           <Icon name="ghost" size={30} />
         </div>
-        <h1 className="text-xl font-bold">This group has expired or doesn’t exist</h1>
-        <p className="mt-2 text-sm text-muted">Groups are deleted after 7 days without activity. Ask for a new link.</p>
+        <h1 className="text-xl font-bold">This group doesn’t exist</h1>
+        <p className="mt-2 text-sm text-muted">It may have been deleted. Ask the admin for a new link.</p>
         {status === 'error' && <p className="mt-3 text-sm text-neg">Couldn’t reach the server.</p>}
       </div>
     )
@@ -96,10 +96,9 @@ export function GroupPage({ id }: { id: string }) {
         <GroupView group={group} />
 
         <p className="mt-8 flex items-start gap-2 text-xs leading-relaxed text-muted">
-          <Icon name="clock" size={14} className="mt-px shrink-0" />
+          <Icon name="users" size={14} className="mt-px shrink-0" />
           <span>
-            Anyone with this link can add and edit expenses. The group is deleted after 7 days of no activity
-            {expiresIn > 0 && <> (expires in {formatExpiry(expiresIn)} unless someone adds something)</>}.
+            Anyone with this link can add and edit expenses.
           </span>
         </p>
       </div>
