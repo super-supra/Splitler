@@ -119,8 +119,10 @@ export function ExpensesTab({ group, onEdit, onAdd }: { group: Group; onEdit: (e
   )
 }
 
-export function BalancesTab({ group, net, transfers, spending, simplify, onSimplify, onSettle }: {
+export function BalancesTab({ group, net, transfers, spending, total, simplify, onSimplify, onSettle }: {
   group: Group
+  /** total spent in the group, for the "big reveal" teaser */
+  total: number
   net: Record<string, number>
   transfers: Transfer[]
   /** set once everyone is settled: each person's share of the total, shown instead of balances */
@@ -235,6 +237,18 @@ export function BalancesTab({ group, net, transfers, spending, simplify, onSimpl
           }}><Icon name="copy" size={16} /> Copy summary</Button>
         )}
       </section>
+
+      {!spending && transfers.length > 0 && group.expenses.length > 0 && (
+        <div className="flex gap-3 rounded-2xl bg-accent/10 px-4 py-3 ring-1 ring-accent/20">
+          <span className="text-xl leading-6" aria-hidden>🤝</span>
+          <div>
+            <p className="font-semibold">
+              {transfers.length} payment{transfers.length === 1 ? '' : 's'} left until the big reveal
+            </p>
+            <p className="mt-0.5 text-sm text-muted">When everyone’s settled, see who spent what from the {money(total)} total.</p>
+          </div>
+        </div>
+      )}
 
       {!spending && <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3.5">
         <span className="grid size-10 place-items-center rounded-xl bg-warn/15 text-warn"><Icon name="bolt" /></span>

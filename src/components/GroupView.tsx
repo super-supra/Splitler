@@ -89,7 +89,7 @@ export function GroupView({ group }: { group: Group }) {
       <Segmented className="mb-5 mt-7" value={tab} options={TABS} onChange={setTab} />
 
       {tab === 'expenses' && <ExpensesTab group={group} onEdit={setEditing} onAdd={() => setEditing('new')} />}
-      {tab === 'balances' && <BalancesTab group={group} net={net} transfers={transfers} spending={spending}
+      {tab === 'balances' && <BalancesTab group={group} net={net} transfers={transfers} spending={spending} total={total}
         simplify={simplify} onSimplify={setSimplify} onSettle={setSettle} />}
       {tab === 'activity' && <ActivityTab group={group} />}
 
