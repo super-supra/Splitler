@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { computeSplit } from '../src/lib/splits.js'
 import { COOKIE, makeToken, passwordMatches, sessionSeconds, tokenValid } from './auth.js'
 import type { Store } from './store.js'
+import { askModel, systemPrompt, toDraft } from './voice.js'
 
 const MAX_MEMBERS = 30
 const MAX_EXPENSES = 500
@@ -80,6 +81,7 @@ const settlementIn = z.object({
   device,
 })
 const whoIn = z.object({ actor, device })
+const voiceIn = z.object({ transcript: z.string().trim().min(3).max(800), me: z.string().max(40).optional(), today: isoDate.optional() })
 const loginIn = z.object({ password: z.string().max(200) })
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -339,6 +341,29 @@ async function route(req: Req, s: Store, env: Record<string, string | undefined>
     await audit(s, id, { action: isExpense ? 'expense.restore' : 'settlement.restore', actor: 'Admin', after: item, ref: entry.id })
     await touch(s, id)
     return respondGroup(s, id)
+  }
+
+  // --- turn a spoken description into a draft expense (nothing is saved here) ---
+  if (kind === 'voice' && m === 'POST' && !itemId) {
+    const apiKey = env.GROQ_API_KEY
+    if (!apiKey) fail(503, 'Voice isn’t set up on this server yet')
+    await limit(s, 'voice', req.ip, 20, 10 * 60)
+    const input = parse(voiceIn, req.body)
+    const members = parseAll<Member>(await s.hgetall(k.members)).sort((a, b) => a.createdAt - b.createdAt)
+    const meta = await loadMeta(s, id)
+    const today = input.today ?? new Date().toISOString().slice(0, 10)
+    const me = members.some((x) => x.id === input.me) ? input.me : undefined
+    let draft
+    try {
+      const out = await askModel(apiKey!, systemPrompt(meta.currency, members, today), input.transcript)
+      draft = toDraft(out, members, me, today)
+    } catch (e) {
+      const why = e instanceof Error ? e.message : ''
+      if (why === 'no-amount') return fail(422, 'I didn’t catch the total amount. Try again, e.g. “I paid 3000 for dinner, split equally”.')
+      if (why === 'busy') return fail(429, 'Voice is busy right now. Try again in a minute, or add it by hand.')
+      return fail(502, 'Couldn’t understand that. Try again, or add it by hand.')
+    }
+    return { status: 200, body: { draft } }
   }
 
   if (kind === 'members' && m === 'POST' && !itemId) {

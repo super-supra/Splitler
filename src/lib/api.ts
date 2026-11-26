@@ -64,6 +64,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export type ExpenseInput = Omit<Expense, 'id'>
 export type SettlementInput = Omit<Settlement, 'id'>
 
+export interface VoiceDraft extends ExpenseInput { warnings: string[] }
+
 export const api = {
   me: () => call<{ admin: boolean }>('GET', '/api/admin/me'),
   login: (password: string) => call<{ admin: boolean }>('POST', '/api/admin/login', { password }),
@@ -79,6 +81,8 @@ export const api = {
     call<GroupPayload | { unchanged: true }>('GET', `/api/groups/${id}${ver ? `?v=${encodeURIComponent(ver)}` : ''}`),
   addMember: (id: string, name: string, actor?: string) =>
     call<GroupPayload>('POST', `/api/groups/${id}/members`, { name, ...who(actor) }),
+  parseVoice: (id: string, transcript: string, me: string | null, today: string) =>
+    call<{ draft: VoiceDraft }>('POST', `/api/groups/${id}/voice`, { transcript, me: me ?? undefined, today }),
   createExpense: (id: string, e: ExpenseInput, actor?: string) =>
     call<GroupPayload>('POST', `/api/groups/${id}/expenses`, { ...e, ...who(actor) }),
   updateExpense: (id: string, eid: string, e: ExpenseInput, actor?: string) =>

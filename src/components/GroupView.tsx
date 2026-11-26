@@ -5,6 +5,8 @@ import type { Expense, Group, Transfer } from '../lib/types'
 import { useGroupCtx } from '../context'
 import { Breakdown, Collapse } from './Breakdown'
 import { ExpenseForm } from './ExpenseForm'
+import { VoiceExpense } from './VoiceExpense'
+import type { ExpenseInput } from '../lib/api'
 import { ActivityTab, BalancesTab, ExpensesTab } from './GroupTabs'
 import { Icon } from './icons'
 import { SettleForm } from './SettleForm'
@@ -21,6 +23,8 @@ export function GroupView({ group }: { group: Group }) {
   const { me } = useGroupCtx()
   const [tab, setTab] = useState<Tab>('expenses')
   const [editing, setEditing] = useState<Expense | 'new' | null>(null)
+  const [voice, setVoice] = useState(false)
+  const [draft, setDraft] = useState<ExpenseInput | undefined>()
   const [settle, setSettle] = useState<Transfer | 'new' | null>(null)
   const [simplify, setSimplify] = useState(true)
   const [open, setOpen] = useState(false)
@@ -93,7 +97,14 @@ export function GroupView({ group }: { group: Group }) {
         simplify={simplify} onSimplify={setSimplify} onSettle={setSettle} />}
       {tab === 'activity' && <ActivityTab group={group} />}
 
-      {editing && <ExpenseForm group={group} existing={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <ExpenseForm group={group} existing={editing === 'new' ? undefined : editing} draft={draft}
+          onVoice={() => { setEditing(null); setVoice(true) }} onClose={() => { setEditing(null); setDraft(undefined) }} />
+      )}
+      {voice && (
+        <VoiceExpense group={group} onClose={() => setVoice(false)}
+          onEdit={(d) => { setVoice(false); setDraft(d); setEditing('new') }} />
+      )}
       {settle && <SettleForm group={group} transfers={transfers} preset={settle === 'new' ? undefined : settle} onClose={() => setSettle(null)} />}
     </div>
   )

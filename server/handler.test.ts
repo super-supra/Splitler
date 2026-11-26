@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handle, type Req, type Res } from './handler.js'
 import { MemoryStore } from './store.js'
 
@@ -232,5 +232,52 @@ describe('toHash (Upstash HGETALL shapes)', () => {
     expect(toHash({ a: '1' })).toEqual({ a: '1' })
     expect(toHash(null)).toEqual({})
     expect(toHash([])).toEqual({})
+  })
+})
+
+describe('voice drafts', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const voice = (id: string, body: unknown, withKey = true) =>
+    handle({ method: 'POST', path: `/api/groups/${id}/voice`, query: {}, body, cookies: {}, ip: '2.2.2.2', secure: false },
+      store, withKey ? { ...env, GROQ_API_KEY: 'k' } : env)
+  const model = (out: unknown) => vi.stubGlobal('fetch', vi.fn(async () =>
+    new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) } }] }))))
+
+  it('needs the key to be configured', async () => {
+    const { id } = await makeGroup()
+    expect((await voice(id, { transcript: 'dinner 300' }, false)).status).toBe(503)
+  })
+
+  it('splits fixed amounts plus the rest equally, doing the maths itself', async () => {
+    const { id, ids } = await makeGroup()
+    model({ description: 'Dinner', amount: 3000, payer: 'me', split: 'exact', category: 'Food',
+      people: [{ name: 'Asha', value: 1000 }, { name: 'Ben', value: 1000 }], restPeople: ['Chen'] })
+    const r = await voice(id, { transcript: 'I paid 3000, Asha and Ben 1000 each, rest Chen', me: ids[2], today: '2026-10-20' })
+    const d = (r.body as { draft: { amount: number; payerId: string; splitType: string; splitValues: Record<string, number>; warnings: string[] } }).draft
+    expect(r.status).toBe(200)
+    expect(d.amount).toBe(300000)
+    expect(d.payerId).toBe(ids[2])
+    expect(d.splitType).toBe('exact')
+    expect(d.splitValues).toEqual({ [ids[0]]: 100000, [ids[1]]: 100000, [ids[2]]: 100000 })
+    expect(d.warnings).toEqual([])
+  })
+
+  it('flags unknown people and falls back to equal when numbers do not add up', async () => {
+    const { id, ids } = await makeGroup()
+    model({ amount: 100, payer: 'Asha', split: 'percent', people: [{ name: 'Ben', value: 30 }, { name: 'Zed', value: 30 }] })
+    const r = await voice(id, { transcript: 'hundred with Ben and Zed', me: ids[0] })
+    const d = (r.body as { draft: { splitType: string; splitValues: Record<string, number>; warnings: string[] } }).draft
+    expect(d.splitType).toBe('equal')
+    expect(Object.keys(d.splitValues)).toEqual([ids[1]])
+    expect(d.warnings.join(' ')).toMatch(/Zed/)
+  })
+
+  it('asks again when no amount was heard, and never saves anything', async () => {
+    const { id, ids } = await makeGroup()
+    model({ description: 'Dinner' })
+    expect((await voice(id, { transcript: 'we had dinner' })).status).toBe(422)
+    const g = await call('GET', `/api/groups/${id}`)
+    expect((g.body as { group: { expenses: unknown[] } }).group.expenses).toHaveLength(0)
+    expect(ids).toHaveLength(3)
   })
 })

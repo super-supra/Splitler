@@ -4,6 +4,7 @@ import { currencySymbol, todayISO } from '../lib/format'
 import { formatMoney, fromMinor, toMinor } from '../lib/money'
 import { computeSplit } from '../lib/splits'
 import { toast } from '../lib/toast'
+import type { ExpenseInput } from '../lib/api'
 import type { Expense, Group, SplitType } from '../lib/types'
 import { useGroupCtx } from '../context'
 import { Icon } from './icons'
@@ -16,22 +17,26 @@ const TYPES: { id: SplitType; label: string }[] = [
   { id: 'shares', label: 'Shares' },
 ]
 
-export function ExpenseForm({ group, existing, onClose }: { group: Group; existing?: Expense; onClose: () => void }) {
+export function ExpenseForm({ group, existing, draft, onVoice, onClose }: {
+  group: Group; existing?: Expense; draft?: ExpenseInput; onVoice?: () => void; onClose: () => void
+}) {
   const { actions, me } = useGroupCtx()
+  // a voice draft pre-fills a new expense; an existing expense is edited in place
+  const init: ExpenseInput | undefined = existing ?? draft
   const [busy, setBusy] = useState(false)
-  const [desc, setDesc] = useState(existing?.description ?? '')
-  const [amount, setAmount] = useState(existing ? fromMinor(existing.amount) : '')
-  const [payer, setPayer] = useState(existing?.payerId ?? me ?? group.members[0]?.id ?? '')
-  const [date, setDate] = useState(existing?.date ?? todayISO())
-  const [category, setCategory] = useState(existing?.category ?? 'General')
-  const [type, setType] = useState<SplitType>(existing?.splitType ?? 'equal')
+  const [desc, setDesc] = useState(init?.description ?? '')
+  const [amount, setAmount] = useState(init ? fromMinor(init.amount) : '')
+  const [payer, setPayer] = useState(init?.payerId || (me ?? group.members[0]?.id ?? ''))
+  const [date, setDate] = useState(init?.date ?? todayISO())
+  const [category, setCategory] = useState(init?.category ?? 'General')
+  const [type, setType] = useState<SplitType>(init?.splitType ?? 'equal')
   const [included, setIncluded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(group.members.map((m) => [m.id, existing ? m.id in existing.splitValues : true])))
+    Object.fromEntries(group.members.map((m) => [m.id, init ? m.id in init.splitValues : true])))
   // text inputs for exact / percent / shares, keyed by member id
   const [vals, setVals] = useState<Record<string, string>>(() => {
-    if (!existing || existing.splitType === 'equal') return {}
-    return Object.fromEntries(Object.entries(existing.splitValues).map(([id, v]) =>
-      [id, existing.splitType === 'exact' ? fromMinor(v) : String(v)]))
+    if (!init || init.splitType === 'equal') return {}
+    return Object.fromEntries(Object.entries(init.splitValues).map(([id, v]) =>
+      [id, init.splitType === 'exact' ? fromMinor(v) : String(v)]))
   })
   const [error, setError] = useState('')
 
@@ -114,6 +119,17 @@ export function ExpenseForm({ group, existing, onClose }: { group: Group; existi
         </div>
       }>
       <div className="space-y-5">
+        {onVoice && !existing && !draft && (
+          <button type="button" onClick={onVoice}
+            className="flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-accent to-fuchsia-500 p-3 text-left text-white shadow-lg shadow-accent/25 transition active:scale-[.99]">
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-accent"><Icon name="mic" size={22} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-bold leading-tight">Just say it</span>
+              <span className="block text-xs text-white/80">Tell us the total and who shared it. We’ll do the maths.</span>
+            </span>
+            <Icon name="arrow" size={18} className="shrink-0 text-white/80" />
+          </button>
+        )}
         <div className="pt-2 text-center">
           <AmountInput symbol={currencySymbol(group.currency)} value={amount} onChange={setAmount} autoFocus={!existing} />
           <input className="mt-2 w-full bg-transparent text-center text-lg font-medium outline-none placeholder:text-muted"
