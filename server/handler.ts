@@ -361,7 +361,8 @@ async function route(req: Req, s: Store, env: Record<string, string | undefined>
       console.error('voice parse failed:', e instanceof Error ? `${e.name}: ${e.message}` : e)
       if (why === 'no-amount') return fail(422, 'I didn’t catch the total amount. Try again, e.g. “I paid 3000 for dinner, split equally”.')
       if (why === 'busy') return fail(429, 'Voice is busy right now. Try again in a minute, or add it by hand.')
-      return fail(502, 'Couldn’t understand that. Try again, or add it by hand.')
+      const code = why.startsWith('upstream') ? ` (${why})` : why === 'unreadable' ? ' (unreadable answer)' : ''
+      return fail(502, `Couldn’t understand that${code}. Try again, or add it by hand.`)
     }
     return { status: 200, body: { draft } }
   }

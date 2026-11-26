@@ -20,16 +20,17 @@ export interface VoiceDraft {
   warnings: string[]
 }
 
+// models often send null for "omitted" fields, so every field accepts null
 const llmOut = z.object({
-  description: z.string().optional(),
-  amount: z.number().optional(),
-  category: z.string().optional(),
-  date: z.string().optional(),
-  payer: z.string().optional(),
-  split: z.enum(['equal', 'exact', 'percent', 'shares']).optional(),
-  people: z.array(z.object({ name: z.string(), value: z.number().optional() })).optional(),
-  restPeople: z.array(z.string()).optional(),
-  everyone: z.boolean().optional(),
+  description: z.string().nullish(),
+  amount: z.coerce.number().nullish(),
+  category: z.string().nullish(),
+  date: z.string().nullish(),
+  payer: z.string().nullish(),
+  split: z.enum(['equal', 'exact', 'percent', 'shares']).nullish().catch(undefined),
+  people: z.array(z.object({ name: z.string(), value: z.coerce.number().nullish() })).nullish().catch(undefined),
+  restPeople: z.array(z.string()).nullish().catch(undefined),
+  everyone: z.boolean().nullish(),
 }).passthrough()
 
 export function systemPrompt(currency: string, members: VoiceMember[], today: string) {
@@ -54,7 +55,7 @@ JSON shape:
 Rules:
 - equal: list the people who share it (or set everyone true). No values.
 - exact: "value" is that person's amount in major units. If some people have fixed amounts and the others share the rest, list the fixed ones in "people" and the others in "restPeople"; do NOT do the subtraction yourself.
-- percent: "value" is the percentage. shares: "value" is the weight (e.g. "double" = 2).
+- percent: "value" is the percentage. If only some people have a percentage and others share the rest, put the others in "restPeople" (do NOT do the subtraction). shares: "value" is the weight (e.g. "double" = 2).
 - Use member names exactly as listed. Never invent people or numbers. If something is not said, omit it.
 - Words like "lakh", "k", "thousand" are amounts: 2k = 2000, 1.5 lakh = 150000.`
 }
@@ -88,7 +89,7 @@ export function toDraft(raw: unknown, members: VoiceMember[], meId: string | und
   }
 
   const split = o.split ?? 'equal'
-  const ids = (names: string[] | undefined) => {
+  const ids = (names: string[] | null | undefined) => {
     const out: string[] = []
     for (const n of names ?? []) {
       const id = findMember(n, members, meId)
@@ -110,16 +111,22 @@ export function toDraft(raw: unknown, members: VoiceMember[], meId: string | und
     for (const p of o.people ?? []) {
       const id = findMember(p.name, members, meId)
       if (!id) { warnings.push(`Skipped “${p.name}”, who isn’t in this group.`); continue }
-      if (p.value === undefined || !Number.isFinite(p.value) || p.value < 0) { warnings.push(`No amount heard for ${p.name}.`); continue }
+      if (p.value == null || !Number.isFinite(p.value) || p.value < 0) { warnings.push(`No amount heard for ${p.name}.`); continue }
       values[id] = split === 'exact' ? toMinorNum(p.value) : p.value
     }
-    if (split === 'exact') {
-      const rest = ids(o.restPeople).filter((id) => !(id in values))
+    if (split === 'exact' || split === 'percent') {
+      const rest = ids(o.restPeople ?? undefined).filter((id) => !(id in values))
       const fixed = Object.values(values).reduce((a, b) => a + b, 0)
       if (rest.length > 0) {
-        const left = amount - fixed
-        if (left < 0) warnings.push('The amounts you named add up to more than the total.')
-        else allocate(left, rest.map(() => 1)).forEach((v, i) => { values[rest[i]] = v })
+        if (split === 'exact') {
+          const left = amount - fixed
+          if (left < 0) warnings.push('The amounts you named add up to more than the total.')
+          else allocate(left, rest.map(() => 1)).forEach((v, i) => { values[rest[i]] = v })
+        } else {
+          const left = 100 - fixed
+          if (left < 0) warnings.push('The percentages you named add up to more than 100%.')
+          else rest.forEach((id) => { values[id] = +(left / rest.length).toFixed(4) })
+        }
       }
     }
   }
@@ -172,7 +179,7 @@ async function askGroq(apiKey: string, system: string, transcript: string): Prom
     throw e
   }
   if (res.status === 429 || res.status === 503) throw new Error('busy')
-  if (!res.ok) throw new Error('upstream')
+  if (!res.ok) throw new Error(`upstream ${res.status}`)
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
   const text = data.choices?.[0]?.message?.content
   if (!text) throw new Error('unreadable')
@@ -202,7 +209,7 @@ async function askGemini(apiKey: string, system: string, transcript: string): Pr
       throw e
     }
     if (res.status === 503 || res.status === 429) continue
-    if (!res.ok) throw new Error('upstream')
+    if (!res.ok) throw new Error(`upstream ${res.status}`)
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('')
     if (!text) throw new Error('unreadable')

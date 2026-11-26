@@ -272,6 +272,18 @@ describe('voice drafts', () => {
     expect(d.warnings).toEqual([])
   })
 
+  it('accepts nulls from the model and gives the rest of a percent split to the others', async () => {
+    const { id, ids } = await makeGroup()
+    model({ description: 'Cab', amount: 1000, category: null, date: null, payer: 'Asha', split: 'percent', everyone: null,
+      people: [{ name: 'Asha', value: 30 }, { name: 'Ben', value: 30 }], restPeople: ['Chen'] })
+    const r = await voice(id, { transcript: 'Asha paid 1000, 30 percent Asha and Ben, rest Chen', me: ids[0] })
+    const d = (r.body as { draft: { splitType: string; splitValues: Record<string, number>; warnings: string[] } }).draft
+    expect(r.status).toBe(200)
+    expect(d.splitType).toBe('percent')
+    expect(d.splitValues).toEqual({ [ids[0]]: 30, [ids[1]]: 30, [ids[2]]: 40 })
+    expect(d.warnings).toEqual([])
+  })
+
   it('flags unknown people and falls back to equal when numbers do not add up', async () => {
     const { id, ids } = await makeGroup()
     model({ amount: 100, payer: 'Asha', split: 'percent', people: [{ name: 'Ben', value: 30 }, { name: 'Zed', value: 30 }] })
