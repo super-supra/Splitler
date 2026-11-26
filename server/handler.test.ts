@@ -239,9 +239,19 @@ describe('voice drafts', () => {
   afterEach(() => vi.unstubAllGlobals())
   const voice = (id: string, body: unknown, withKey = true) =>
     handle({ method: 'POST', path: `/api/groups/${id}/voice`, query: {}, body, cookies: {}, ip: '2.2.2.2', secure: false },
-      store, withKey ? { ...env, GROQ_API_KEY: 'k' } : env)
+      store, withKey ? { ...env, GEMINI_API_KEY: 'k' } : env)
   const model = (out: unknown) => vi.stubGlobal('fetch', vi.fn(async () =>
-    new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) } }] }))))
+    new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }))))
+
+  it('uses Groq when its key is set', async () => {
+    const { id, ids } = await makeGroup()
+    const f = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ amount: 90, payer: 'me', split: 'equal' }) } }] })))
+    vi.stubGlobal('fetch', f)
+    const r = await handle({ method: 'POST', path: `/api/groups/${id}/voice`, query: {}, body: { transcript: 'ninety for lunch', me: ids[0] }, cookies: {}, ip: '3.3.3.3', secure: false },
+      store, { ...env, GROQ_API_KEY: 'g' })
+    expect(r.status).toBe(200)
+    expect(String((f.mock.calls[0] as unknown[])[0])).toContain('groq.com')
+  })
 
   it('needs the key to be configured', async () => {
     const { id } = await makeGroup()

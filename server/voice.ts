@@ -2,7 +2,9 @@ import { z } from 'zod'
 import { allocate, computeSplit } from '../src/lib/splits.js'
 
 const CATEGORY_IDS = ['General', 'Food', 'Groceries', 'Transport', 'Stay', 'Fun', 'Bills']
-const MODEL = 'llama-3.3-70b-versatile'
+// "-latest" alias so a retired model name can't silently break voice
+const GEMINI_MODEL = 'gemini-flash-latest'
+const GROQ_MODEL = 'llama-3.3-70b-versatile'
 
 export interface VoiceMember { id: string; name: string }
 
@@ -142,22 +144,69 @@ export function toDraft(raw: unknown, members: VoiceMember[], meId: string | und
   return { description, amount, payerId: payerId ?? '', category, date, splitType, splitValues: values, warnings }
 }
 
-export async function askModel(apiKey: string, system: string, transcript: string): Promise<unknown> {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: system }, { role: 'user', content: transcript }],
-    }),
-    signal: AbortSignal.timeout(15_000),
-  })
-  if (res.status === 429) throw new Error('busy')
+export type Keys = { GROQ_API_KEY?: string; GEMINI_API_KEY?: string }
+
+/** Groq is preferred when both keys are set; either one turns voice on. */
+export const voiceConfigured = (k: Keys) => !!(k.GROQ_API_KEY || k.GEMINI_API_KEY)
+
+export async function askModel(keys: Keys, system: string, transcript: string): Promise<unknown> {
+  return keys.GROQ_API_KEY ? askGroq(keys.GROQ_API_KEY, system, transcript) : askGemini(keys.GEMINI_API_KEY!, system, transcript)
+}
+
+async function askGroq(apiKey: string, system: string, transcript: string): Promise<unknown> {
+  let res: Response
+  try {
+    res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: system }, { role: 'user', content: transcript }],
+      }),
+      signal: AbortSignal.timeout(8_000),
+    })
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('busy')
+    throw e
+  }
+  if (res.status === 429 || res.status === 503) throw new Error('busy')
   if (!res.ok) throw new Error('upstream')
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
   const text = data.choices?.[0]?.message?.content
   if (!text) throw new Error('unreadable')
   return JSON.parse(text)
+}
+
+async function askGemini(apiKey: string, system: string, transcript: string): Promise<unknown> {
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: transcript }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+  })
+  // the free tier is sometimes overloaded (503); a quick retry usually gets through
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1000))
+    let res: Response
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+        method: 'POST',
+        // key goes in a header, not the URL, so it never lands in logs
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body,
+        signal: AbortSignal.timeout(5_000),
+      })
+    } catch (e) {
+      if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) continue // overloaded: treat like 503
+      throw e
+    }
+    if (res.status === 503 || res.status === 429) continue
+    if (!res.ok) throw new Error('upstream')
+    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('')
+    if (!text) throw new Error('unreadable')
+    return JSON.parse(text)
+  }
+  throw new Error('busy')
 }

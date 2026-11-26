@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { computeSplit } from '../src/lib/splits.js'
 import { COOKIE, makeToken, passwordMatches, sessionSeconds, tokenValid } from './auth.js'
 import type { Store } from './store.js'
-import { askModel, systemPrompt, toDraft } from './voice.js'
+import { askModel, systemPrompt, toDraft, voiceConfigured } from './voice.js'
 
 const MAX_MEMBERS = 30
 const MAX_EXPENSES = 500
@@ -345,8 +345,7 @@ async function route(req: Req, s: Store, env: Record<string, string | undefined>
 
   // --- turn a spoken description into a draft expense (nothing is saved here) ---
   if (kind === 'voice' && m === 'POST' && !itemId) {
-    const apiKey = env.GROQ_API_KEY
-    if (!apiKey) fail(503, 'Voice isn’t set up on this server yet')
+    if (!voiceConfigured(env)) fail(503, 'Voice isn’t set up on this server yet')
     await limit(s, 'voice', req.ip, 20, 10 * 60)
     const input = parse(voiceIn, req.body)
     const members = parseAll<Member>(await s.hgetall(k.members)).sort((a, b) => a.createdAt - b.createdAt)
@@ -355,10 +354,11 @@ async function route(req: Req, s: Store, env: Record<string, string | undefined>
     const me = members.some((x) => x.id === input.me) ? input.me : undefined
     let draft
     try {
-      const out = await askModel(apiKey!, systemPrompt(meta.currency, members, today), input.transcript)
+      const out = await askModel(env, systemPrompt(meta.currency, members, today), input.transcript)
       draft = toDraft(out, members, me, today)
     } catch (e) {
       const why = e instanceof Error ? e.message : ''
+      console.error('voice parse failed:', e instanceof Error ? `${e.name}: ${e.message}` : e)
       if (why === 'no-amount') return fail(422, 'I didn’t catch the total amount. Try again, e.g. “I paid 3000 for dinner, split equally”.')
       if (why === 'busy') return fail(429, 'Voice is busy right now. Try again in a minute, or add it by hand.')
       return fail(502, 'Couldn’t understand that. Try again, or add it by hand.')
