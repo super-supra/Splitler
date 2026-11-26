@@ -17,11 +17,11 @@ function Logo({ className = '' }: { className?: string }) {
   )
 }
 
-/** Sticky strip with a new dad joke each day. Pure client-side: no API, no cost. */
+/** Strip under the page title with a new dad joke each day; it pins to the top once the title scrolls away. Pure client-side: no API, no cost. */
 function JokeBanner() {
   const [setup, punch] = jokeFor()
   return (
-    <div className="sticky top-0 z-10 -mx-4 bg-bg/85 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md">
+    <div className="sticky top-0 z-10 -mx-4 mb-3 bg-bg/85 px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-md">
       <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-400/20 via-orange-400/15 to-rose-400/20 px-3.5 py-2.5 ring-1 ring-amber-300/20">
         <span aria-hidden className="text-2xl">😄</span>
         <p className="min-w-0 text-[13px] leading-snug">
@@ -84,9 +84,8 @@ export function AdminHome() {
   const link = (id: string) => `${window.location.origin}/g/${id}`
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-16">
-      <JokeBanner />
-      <header className="mb-6 mt-3 flex items-center justify-between">
+    <div className="mx-auto max-w-xl px-4 pb-16 pt-[max(1.5rem,env(safe-area-inset-top))]">
+      <header className="mb-3 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-muted">Splitler admin</p>
           <h1 className="text-3xl font-extrabold tracking-tight">Groups</h1>
@@ -100,6 +99,8 @@ export function AdminHome() {
           </Button>
         </div>
       </header>
+
+      <JokeBanner />
 
       {groups.length === 0 ? (
         <div className="flex flex-col items-center rounded-3xl bg-surface px-6 py-14 text-center">
