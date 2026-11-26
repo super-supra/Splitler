@@ -4,7 +4,28 @@ import { allocate, computeSplit } from '../src/lib/splits.js'
 const CATEGORY_IDS = ['General', 'Food', 'Groceries', 'Transport', 'Stay', 'Fun', 'Bills']
 // "-latest" alias so a retired model name can't silently break voice
 const GEMINI_MODEL = 'gemini-flash-latest'
-const GROQ_MODEL = 'llama-3.3-70b-versatile'
+// best first; the live model list decides which of these actually exists
+const GROQ_PREFERRED = ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant']
+let groqModel: { key: string; id: string; at: number } | undefined
+
+async function pickGroqModel(apiKey: string, override?: string): Promise<string> {
+  if (override) return override
+  if (groqModel && groqModel.key === apiKey && Date.now() - groqModel.at < 3_600_000) return groqModel.id
+  let id = GROQ_PREFERRED[0]
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(4_000),
+    })
+    if (res.ok) {
+      const have = ((await res.json()) as { data?: { id?: string }[] }).data?.map((m) => m.id ?? '') ?? []
+      id = GROQ_PREFERRED.find((m) => have.includes(m))
+        ?? have.find((m) => /llama|gpt-oss|qwen/i.test(m) && !/whisper|guard|tts|vision|safeguard/i.test(m))
+        ?? id
+    }
+  } catch { /* list unavailable: try the first choice */ }
+  groqModel = { key: apiKey, id, at: Date.now() }
+  return id
+}
 
 export interface VoiceMember { id: string; name: string }
 
@@ -151,23 +172,24 @@ export function toDraft(raw: unknown, members: VoiceMember[], meId: string | und
   return { description, amount, payerId: payerId ?? '', category, date, splitType, splitValues: values, warnings }
 }
 
-export type Keys = { GROQ_API_KEY?: string; GEMINI_API_KEY?: string }
+export type Keys = { GROQ_API_KEY?: string; GEMINI_API_KEY?: string; GROQ_MODEL?: string }
 
 /** Groq is preferred when both keys are set; either one turns voice on. */
 export const voiceConfigured = (k: Keys) => !!(k.GROQ_API_KEY || k.GEMINI_API_KEY)
 
 export async function askModel(keys: Keys, system: string, transcript: string): Promise<unknown> {
-  return keys.GROQ_API_KEY ? askGroq(keys.GROQ_API_KEY, system, transcript) : askGemini(keys.GEMINI_API_KEY!, system, transcript)
+  return keys.GROQ_API_KEY ? askGroq(keys.GROQ_API_KEY, system, transcript, keys.GROQ_MODEL) : askGemini(keys.GEMINI_API_KEY!, system, transcript)
 }
 
-async function askGroq(apiKey: string, system: string, transcript: string): Promise<unknown> {
+async function askGroq(apiKey: string, system: string, transcript: string, override?: string): Promise<unknown> {
+  const model = await pickGroqModel(apiKey, override)
   let res: Response
   try {
     res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model,
         temperature: 0,
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: system }, { role: 'user', content: transcript }],
@@ -179,6 +201,7 @@ async function askGroq(apiKey: string, system: string, transcript: string): Prom
     throw e
   }
   if (res.status === 429 || res.status === 503) throw new Error('busy')
+  if (res.status === 404 || res.status === 400) groqModel = undefined // model may have been retired: look again next time
   if (!res.ok) throw new Error(`upstream ${res.status}`)
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
   const text = data.choices?.[0]?.message?.content

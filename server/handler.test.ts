@@ -253,6 +253,23 @@ describe('voice drafts', () => {
     expect(String((f.mock.calls[0] as unknown[])[0])).toContain('groq.com')
   })
 
+  it('asks Groq which models exist and uses the best available one', async () => {
+    const { id, ids } = await makeGroup()
+    const urls: string[] = []
+    const bodies: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (u: string, init?: { body?: string }) => {
+      urls.push(String(u)); if (init?.body) bodies.push(init.body)
+      return String(u).endsWith('/models')
+        ? new Response(JSON.stringify({ data: [{ id: 'whisper-large-v3' }, { id: 'openai/gpt-oss-20b' }] }))
+        : new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ amount: 50, payer: 'me', split: 'equal' }) } }] }))
+    }))
+    const r = await handle({ method: 'POST', path: `/api/groups/${id}/voice`, query: {}, body: { transcript: 'fifty for tea', me: ids[0] }, cookies: {}, ip: '4.4.4.4', secure: false },
+      store, { ...env, GROQ_API_KEY: 'g2', GROQ_MODEL: undefined })
+    expect(r.status).toBe(200)
+    expect(urls.some((u) => u.endsWith('/models'))).toBe(true)
+    expect(bodies.some((b) => b.includes('"model":"openai/gpt-oss-20b"'))).toBe(true)
+  })
+
   it('needs the key to be configured', async () => {
     const { id } = await makeGroup()
     expect((await voice(id, { transcript: 'dinner 300' }, false)).status).toBe(503)
