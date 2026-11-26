@@ -3,6 +3,7 @@ import { Icon } from '../components/icons'
 import { NewGroup } from '../components/NewGroup'
 import { Avatar, Button, ErrorText, inputCls, Spinner } from '../components/ui'
 import { api, ApiError, type AdminGroup } from '../lib/api'
+import { jokeFor } from '../lib/jokes'
 import { navigate } from '../lib/route'
 import { copyText, toast } from '../lib/toast'
 
@@ -12,6 +13,22 @@ function Logo({ className = '' }: { className?: string }) {
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.4} strokeLinecap="round" aria-hidden>
         <path d="M12 3v18M7 8l5-5 5 5M7 16l5 5 5-5" />
       </svg>
+    </div>
+  )
+}
+
+/** Sticky strip with a new dad joke each day. Pure client-side: no API, no cost. */
+function JokeBanner() {
+  const [setup, punch] = jokeFor()
+  return (
+    <div className="sticky top-0 z-10 -mx-4 bg-bg/85 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md">
+      <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-400/20 via-orange-400/15 to-rose-400/20 px-3.5 py-2.5 ring-1 ring-amber-300/20">
+        <span aria-hidden className="text-2xl">😄</span>
+        <p className="min-w-0 text-[13px] leading-snug">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-300/90">Dad joke of the day</span>
+          <span className="text-white/90">{setup}</span> <span className="font-semibold text-amber-200">{punch}</span>
+        </p>
+      </div>
     </div>
   )
 }
@@ -67,8 +84,9 @@ export function AdminHome() {
   const link = (id: string) => `${window.location.origin}/g/${id}`
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-16 pt-[max(1.5rem,env(safe-area-inset-top))]">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="mx-auto max-w-xl px-4 pb-16">
+      <JokeBanner />
+      <header className="mb-6 mt-3 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-muted">Splitler admin</p>
           <h1 className="text-3xl font-extrabold tracking-tight">Groups</h1>

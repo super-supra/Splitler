@@ -80,3 +80,14 @@ describe('toMinor', () => {
     expect(toMinor('1.234')).toBeNull()
   })
 })
+
+describe('daily joke', () => {
+  it('is stable within a day, changes the next day, and every joke is complete', async () => {
+    const { jokeFor, JOKES } = await import('./jokes')
+    const a = new Date(2026, 10, 26, 8, 0)
+    expect(jokeFor(a)).toEqual(jokeFor(new Date(2026, 10, 26, 23, 59)))
+    expect(jokeFor(a)).not.toEqual(jokeFor(new Date(2026, 10, 27, 0, 1)))
+    expect(new Set(JOKES.map((j) => j.join(' '))).size).toBe(JOKES.length)
+    for (const [s, p] of JOKES) expect(s.length > 3 && p.length > 3).toBe(true)
+  })
+})
